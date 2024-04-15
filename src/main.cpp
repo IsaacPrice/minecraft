@@ -119,7 +119,7 @@ int main() {
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // Create the object
-    Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/dirt.bmp");
+    Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/uvtemplate.bmp");
 
     // Create the camera
     glm::mat4 Projection = glm::perspective(glm::radians(45.0f), (float) width / (float)height, 0.1f, 100.0f);
