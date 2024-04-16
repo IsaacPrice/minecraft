@@ -91,7 +91,14 @@ static const GLfloat g_uv_buffer_data[] = {
 	0.667979f, 1.0f-0.335851f
 };
 
+void runDoubleLoop() {
+	cout << "A name" << endl;
+	return void;
+}
+
 int main() {
+	void (*function)()
+	
     // Create and initialize the program
     glfwInit();
     glfwWindowHint(GLFW_SAMPLES, 4);

@@ -1,0 +1,4 @@
+0: air
+1: grass
+2: dirt
+3: stone
