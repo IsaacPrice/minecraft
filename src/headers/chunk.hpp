@@ -70,10 +70,10 @@ void Chunk::Generate(long unsigned &seed) {
 }
 
 // Template to save repetitive coding
-void Chunk::DoubleLoop(void (*function)(int x, int y)) {
+void Chunk::DoubleLoop(void (*func)(int x, int y)) {
     for (unsigned i = 0; i < 16; i++) {
         for(unsigned j = 0; j < 16; j++) {
-            function(i, j);
+            func(i, j);
         }
     }
 }
