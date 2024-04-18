@@ -12,9 +12,11 @@
 
 #include "headers/shader.hpp"
 #include "headers/object.hpp"
+#include "headers/chunk.hpp"
 #include "headers/controls.hpp"
 
 GLFWwindow* window;
+GLuint* programID;
 const int width = 1024, height = 768;
 
 static const GLfloat g_vertex_buffer_data[] = { 
@@ -67,7 +69,6 @@ static const GLfloat g_vertex_buffer_data[] = {
     -0.5f, -0.5f, -0.5f, // Bottom-right
 	
 };
-
 static const GLfloat g_uv_buffer_data[] = { 
     // Front face
     0.125f, 0.0625f,
@@ -138,7 +139,7 @@ int main() {
     }
 
     // Create the shader
-    GLuint programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
+    programID = &LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // Create the object
@@ -155,7 +156,7 @@ int main() {
 	//glEnable(GL_CULL_FACE);
     glDepthFunc(GL_LESS);
 
-	printf("Starting loop.\n");
+	Chunk chunky;
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
