@@ -18,7 +18,7 @@ GLFWwindow* window;
 const int width = 1024, height = 768;
 
 static const GLfloat g_vertex_buffer_data[] = { 
-// Front face
+    // Front face
     -0.5f, -0.5f,  0.5f, // Bottom-left
      0.5f, -0.5f,  0.5f, // Bottom-right
      0.5f,  0.5f,  0.5f, // Top-right

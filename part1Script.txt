@@ -1,0 +1,19 @@
+this is the beginning to a series where I learn graphics programming in C++ through creating minecraft.
+
+So why minecraft?
+I chose minecraft since on the surface level it seems easy to do. The graphics part of it seemed easy enough, and it remains simple for the first part. The more complicated part comes in general programming, with optimization and problem solving.
+I've also chosen C++ for this project due to it being the first language I learned, and it is also what many game engines use. 
+
+1. Downloading and Installing Packages
+I chose openGL 3.3, as those had the most tutorials online which would make the learning process much quicker. 
+I 
+
+After I got the project setup, I made the first window. 
+from there I made a single red triangle.
+after that I created a the fragment and vertex shaders.
+Finally linking all of the shader programs together, I could draw ... another red triangle.
+from there I added the camera, which was static at a top-side like angle
+next, I made the red triangle a red cube.
+
+the last thing I needed to do was to get the texture onto the cube. I've known that minecraft uses a texture atlas, but I had absolutely no Idea how it was used until just now. 
+You basically set a certain part of the texture to specifically the corners on the cube, which lines it up and draws as we expect to see it. 
