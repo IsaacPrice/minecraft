@@ -18,7 +18,7 @@ GLFWwindow* window;
 const int width = 1024, height = 768;
 
 static const GLfloat g_vertex_buffer_data[] = { 
-	// Front face
+// Front face
     -0.5f, -0.5f,  0.5f, // Bottom-left
      0.5f, -0.5f,  0.5f, // Bottom-right
      0.5f,  0.5f,  0.5f, // Top-right
@@ -26,12 +26,85 @@ static const GLfloat g_vertex_buffer_data[] = {
     -0.5f,  0.5f,  0.5f, // Top-left
     -0.5f, -0.5f,  0.5f, // Bottom-left
 
-	// Left face
+    // Back face
+    -0.5f, -0.5f, -0.5f, // Bottom-right
+     0.5f, -0.5f, -0.5f, // Bottom-left
+     0.5f,  0.5f, -0.5f, // Top-left
+     0.5f,  0.5f, -0.5f, // Top-left
+    -0.5f,  0.5f, -0.5f, // Top-right
+    -0.5f, -0.5f, -0.5f, // Bottom-right
+
+    // Top face
+    -0.5f,  0.5f, -0.5f, // Top-left
+    -0.5f,  0.5f,  0.5f, // Bottom-left
+     0.5f,  0.5f,  0.5f, // Bottom-right
+     0.5f,  0.5f,  0.5f, // Bottom-right
+     0.5f,  0.5f, -0.5f, // Top-right
+    -0.5f,  0.5f, -0.5f, // Top-left
+
+    // Bottom face
+    -0.5f, -0.5f, -0.5f, // Top-right
+     0.5f, -0.5f, -0.5f, // Top-left
+     0.5f, -0.5f,  0.5f, // Bottom-left
+     0.5f, -0.5f,  0.5f, // Bottom-left
+    -0.5f, -0.5f,  0.5f, // Bottom-right
+    -0.5f, -0.5f, -0.5f, // Top-right
+
+    // Right face
+     0.5f, -0.5f, -0.5f, // Bottom-left
+     0.5f,  0.5f, -0.5f, // Top-left
+     0.5f,  0.5f,  0.5f, // Top-right
+     0.5f,  0.5f,  0.5f, // Top-right
+     0.5f, -0.5f,  0.5f, // Bottom-right
+     0.5f, -0.5f, -0.5f, // Bottom-left
+
+    // Left face
+    -0.5f, -0.5f, -0.5f, // Bottom-right
+    -0.5f,  0.5f, -0.5f, // Top-right
+    -0.5f,  0.5f,  0.5f, // Top-left
+    -0.5f,  0.5f,  0.5f, // Top-left
+    -0.5f, -0.5f,  0.5f, // Bottom-left
+    -0.5f, -0.5f, -0.5f, // Bottom-right
 	
 };
 
 static const GLfloat g_uv_buffer_data[] = { 
     // Front face
+    0.125f, 0.0625f,
+    0.1875f, 0.0625f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0f,
+    0.125f, 0.0f,
+    0.125f, 0.0625f,
+
+    0.125f, 0.0625f,
+    0.1875f, 0.0625f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0f,
+    0.125f, 0.0f,
+    0.125f, 0.0625f,
+
+    0.125f, 0.0625f,
+    0.1875f, 0.0625f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0f,
+    0.125f, 0.0f,
+    0.125f, 0.0625f,
+
+    0.125f, 0.0625f,
+    0.1875f, 0.0625f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0f,
+    0.125f, 0.0f,
+    0.125f, 0.0625f,
+
+    0.125f, 0.0625f,
+    0.1875f, 0.0625f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0f,
+    0.125f, 0.0f,
+    0.125f, 0.0625f,
+
     0.125f, 0.0625f,
     0.1875f, 0.0625f,
     0.1875f, 0.0f,
@@ -44,7 +117,7 @@ int main() {
 	
     // Create and initialize the program
     glfwInit();
-    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_SAMPLES, 0);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -69,7 +142,7 @@ int main() {
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // Create the object
-    Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/textureAtlas.png");
+    Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/finally.png");
 
     // Create the camera
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -79,7 +152,7 @@ int main() {
 	glfwSetCursorPos(window, width/2, height/2);
 
     glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
+	//glEnable(GL_CULL_FACE);
     glDepthFunc(GL_LESS);
 
 	printf("Starting loop.\n");
