@@ -9,7 +9,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include "headers/object.hpp"
+#include "object.hpp"
+
+extern GLuint programID;
 
 using namespace std;
 
@@ -20,7 +22,7 @@ public:
 
     // create chunk
 
-
+    void DrawChunk();
     // Engine Functions
     void MakeVertexObject();
 
@@ -29,8 +31,10 @@ public:
 
 private:
     int blockMap[16][64][16] = {0}; // 16 wide, 64 tall, and 16 long
+    Object* chunk;
     GLfloat* vertices;
-    Glfloat* uvCoords;
+    GLfloat* uvCoords;
+    vector<unsigned> indices;
 };
 
 Chunk::Chunk() {
@@ -41,9 +45,17 @@ Chunk::Chunk() {
         }
     }
 
+    GLuint programID = 3;
+
     MakeVertexObject();
     // Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/finally.png");
-    Object chunk(*vertices, *uvCoords, sizeof(*vertices), sizeof(*uvCoords), programID, "content/finally.png");
+    // Create a new chunk object
+    chunk = new Object(vertices, uvCoords, indices, sizeof(vertices), sizeof(uvCoords), programID, "content/finally.png");
+}
+
+void Chunk::DrawChunk() {
+    // Draw the chunk
+    chunk->Draw();
 }
 
 void Chunk::MakeVertexObject() {
@@ -89,11 +101,36 @@ void Chunk::MakeVertexObject() {
                     startX + width, startY,
                     startX + width, startY,
                     startX, startY,
-                    startX, startY + width;
-                }
+                    startX, startY + width
+                };
+
+                vector<unsigned int> tempIndices = {
+                    // Front face
+                    0, 1, 2, 
+                    2, 3, 0, 
+                    // Right face
+                    1, 5, 6,
+                    6, 2, 1,
+                    // Left face
+                    4, 0, 3,
+                    3, 7, 4,
+                    // Top face
+                    3, 2, 6,
+                    6, 7, 3,
+                    // Bottom face
+                    4, 5, 1,
+                    1, 0, 4,
+                    // Back face
+                    5, 4, 7,
+                    7, 6, 5
+                };
 
                 for (unsigned i = 0; i < 6; i++) {
                     uvData.insert(uvData.end(), temp, temp + 6);
+                    // Add the indices
+                    for (unsigned j = 0; j < 6; j++) {
+                        indices.push_back(tempIndices[j] + i * 6);
+                    }
                 }
             }
         }
@@ -106,4 +143,5 @@ void Chunk::MakeVertexObject() {
     // Append the new UV coords to the array
     uvCoords = new GLfloat[uvData.size()];
     std::copy(uvData.begin(), uvData.end(), uvCoords);
+
 }

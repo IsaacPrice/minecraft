@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cstring>
+#include <vector>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -11,114 +12,96 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "headers/shader.hpp"
-#include "headers/object.hpp"
-#include "headers/chunk.hpp"
+//#include "headers/chunk.hpp"
 #include "headers/controls.hpp"
+#include "headers/object.hpp"
 
 GLFWwindow* window;
-GLuint* programID;
-const int width = 1024, height = 768;
+GLuint programID;
+const int width = 1920, height = 1080;
 
-static const GLfloat g_vertex_buffer_data[] = { 
+using namespace std;
+
+vector<GLfloat> vertices = {
+	-0.5f, -0.5f,  0.5f, 
+     0.5f, -0.5f,  0.5f,
+     0.5f,  0.5f,  0.5f,
+    -0.5f,  0.5f,  0.5f,
+    -0.5f, -0.5f,  -0.5f,
+     0.5f, -0.5f,  -0.5f,
+     0.5f,  0.5f,  -0.5f,
+    -0.5f,  0.5f,  -0.5f,
+};
+
+vector<GLfloat> uvs = {
     // Front face
-    -0.5f, -0.5f,  0.5f, // Bottom-left
-     0.5f, -0.5f,  0.5f, // Bottom-right
-     0.5f,  0.5f,  0.5f, // Top-right
-     0.5f,  0.5f,  0.5f, // Top-right
-    -0.5f,  0.5f,  0.5f, // Top-left
-    -0.5f, -0.5f,  0.5f, // Bottom-left
+    0.125f, 0.0f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0625f,
+    0.125f, 0.0625f,
 
     // Back face
-    -0.5f, -0.5f, -0.5f, // Bottom-right
-     0.5f, -0.5f, -0.5f, // Bottom-left
-     0.5f,  0.5f, -0.5f, // Top-left
-     0.5f,  0.5f, -0.5f, // Top-left
-    -0.5f,  0.5f, -0.5f, // Top-right
-    -0.5f, -0.5f, -0.5f, // Bottom-right
+    0.125f, 0.0f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0625f,
+    0.125f, 0.0625f,
 
     // Top face
-    -0.5f,  0.5f, -0.5f, // Top-left
-    -0.5f,  0.5f,  0.5f, // Bottom-left
-     0.5f,  0.5f,  0.5f, // Bottom-right
-     0.5f,  0.5f,  0.5f, // Bottom-right
-     0.5f,  0.5f, -0.5f, // Top-right
-    -0.5f,  0.5f, -0.5f, // Top-left
+    0.125f, 0.0f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0625f,
+    0.125f, 0.0625f,
 
     // Bottom face
-    -0.5f, -0.5f, -0.5f, // Top-right
-     0.5f, -0.5f, -0.5f, // Top-left
-     0.5f, -0.5f,  0.5f, // Bottom-left
-     0.5f, -0.5f,  0.5f, // Bottom-left
-    -0.5f, -0.5f,  0.5f, // Bottom-right
-    -0.5f, -0.5f, -0.5f, // Top-right
-
-    // Right face
-     0.5f, -0.5f, -0.5f, // Bottom-left
-     0.5f,  0.5f, -0.5f, // Top-left
-     0.5f,  0.5f,  0.5f, // Top-right
-     0.5f,  0.5f,  0.5f, // Top-right
-     0.5f, -0.5f,  0.5f, // Bottom-right
-     0.5f, -0.5f, -0.5f, // Bottom-left
+    0.125f, 0.0f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0625f,
+    0.125f, 0.0625f,
 
     // Left face
-    -0.5f, -0.5f, -0.5f, // Bottom-right
-    -0.5f,  0.5f, -0.5f, // Top-right
-    -0.5f,  0.5f,  0.5f, // Top-left
-    -0.5f,  0.5f,  0.5f, // Top-left
-    -0.5f, -0.5f,  0.5f, // Bottom-left
-    -0.5f, -0.5f, -0.5f, // Bottom-right
-	
+    0.125f, 0.0f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0625f,
+    0.125f, 0.0625f,
+
+    // Right face
+    0.125f, 0.0f,
+    0.1875f, 0.0f,
+    0.1875f, 0.0625f,
+    0.125f, 0.0625f,
 };
-static const GLfloat g_uv_buffer_data[] = { 
-    // Front face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
 
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+vector<unsigned short> indices = {
+    // front
+	0, 1, 2,
+	2, 3, 0,
 
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+	// right
+	1, 5, 6,
+	6, 2, 1,
 
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+	// back
+	7, 6, 5,
+	5, 4, 7,
 
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+	// left
+	4, 0, 3,
+	3, 7, 4,
 
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+	// bottom
+	4, 5, 1,
+	1, 0, 4,
+
+	// top
+	3, 2, 6,
+	6, 7, 3
 };
 
 int main() {
 	
     // Create and initialize the program
     glfwInit();
-    glfwWindowHint(GLFW_SAMPLES, 0);
+    glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -139,11 +122,11 @@ int main() {
     }
 
     // Create the shader
-    programID = &LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
+    programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // Create the object
-    Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/finally.png");
+    Object triangle1(vertices, uvs, indices);
 
     // Create the camera
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -153,10 +136,10 @@ int main() {
 	glfwSetCursorPos(window, width/2, height/2);
 
     glEnable(GL_DEPTH_TEST);
-	//glEnable(GL_CULL_FACE);
+    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     glDepthFunc(GL_LESS);
 
-	Chunk chunky;
+	//Chunk chunky;
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -172,6 +155,7 @@ int main() {
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
         triangle1.Draw();
+        //chunky.DrawChunk();
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);

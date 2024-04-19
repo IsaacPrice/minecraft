@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+extern GLuint programID;
 
 using namespace std;
 
@@ -13,20 +16,31 @@ GLuint loadPNG(const char *imagepath, bool useAlphaChannel = false);
 
 class Object {
 public:
+    Object() {};
     // Create the Object Class
-    Object(const GLfloat vertex_data[], const GLfloat uv_data[], size_t vertex_size, size_t uv_size, GLuint programID, const char *image) {
+    Object(vector<GLfloat> vertex, vector<GLfloat> uvs, vector<unsigned short> indices) {
+        this->indices = indices;
+        
+        // Create the Vertex Array Object
         glGenVertexArrays(1, &VertexArrayID);
         glBindVertexArray(VertexArrayID);
 
+        // Setup the vertex buffer
         glGenBuffers(1, &vertexBuffer);
         glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-        glBufferData(GL_ARRAY_BUFFER, vertex_size, vertex_data, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, vertex.size() * sizeof(GLfloat), &vertex[0], GL_STATIC_DRAW);
 
+        // Setup the UV buffer
         glGenBuffers(1, &uvBuffer);
         glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
-        glBufferData(GL_ARRAY_BUFFER, uv_size, uv_data, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), &uvs[0], GL_STATIC_DRAW);
 
-        Texture = loadPNG(image);
+        // Create a indice buffer
+        glGenBuffers(1, &elementBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned short), &indices[0], GL_STATIC_DRAW);
+
+        Texture = loadPNG("content/finally.png");
         TextureID = glGetUniformLocation(programID, "myTextureSampler");
     };  
 
@@ -38,25 +52,25 @@ public:
     };
 
     void Draw() {
-		// Bind the vertices
+        // Bind the vertex array
         glEnableVertexAttribArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-        glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-        // bind the tex coords
+        // Bind the UV array
         glEnableVertexAttribArray(1);
         glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
-        glVertexAttribPointer( 1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
         // Bind the texture
         glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, Texture);
-		glUniform1i(TextureID, 0);
+        glBindTexture(GL_TEXTURE_2D, Texture);
+        glUniform1i(TextureID, 0);
 
         // Draw the object
-        glDrawArrays(GL_TRIANGLES, 0, 12*3); 
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer);
+        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, (void*)0);
 
-        // Close the stuff
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
     }
@@ -67,11 +81,12 @@ private:
     GLuint VertexArrayID;
     GLuint vertexBuffer;
     GLuint uvBuffer;
+    GLuint elementBuffer;
+    vector<unsigned short> indices;
 
     int vertices;
 };
 
-// TODO: Likely that this will be changed for minecraft
 GLuint loadPNG(const char *imagepath, bool useAlphaChannel) {
     // printf("Reading image %s\n", imagepath);
 
@@ -104,6 +119,8 @@ GLuint loadPNG(const char *imagepath, bool useAlphaChannel) {
     glGenerateMipmap(GL_TEXTURE_2D);
 
     stbi_image_free(data);
+
+    printf("Texture ID: %d\n", textureID);
 
     return textureID;
 }
