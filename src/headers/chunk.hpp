@@ -30,10 +30,12 @@ public:
     void DoubleLoop(void (*function)(int x, int y));
 
 private:
-    int blockMap[16][64][16] = {0}; // 16 wide, 64 tall, and 16 long
+    unsigned short blockMap[16][64][16] = {0}; // 16 wide, 64 tall, and 16 long
     Object* chunk;
-    GLfloat* vertices;
-    GLfloat* uvCoords;
+    //GLfloat* vertices;
+    //GLfloat* uvCoords;
+    vector<GLfloat> vertices;
+    vector<GLfloat> uvCoords;
     vector<unsigned> indices;
 };
 
@@ -50,7 +52,7 @@ Chunk::Chunk() {
     MakeVertexObject();
     // Object triangle1(g_vertex_buffer_data, g_uv_buffer_data, sizeof(g_vertex_buffer_data), sizeof(g_uv_buffer_data), programID, "content/finally.png");
     // Create a new chunk object
-    chunk = new Object(vertices, uvCoords, indices, sizeof(vertices), sizeof(uvCoords), programID, "content/finally.png");
+    chunk = new Object();
 }
 
 void Chunk::DrawChunk() {
