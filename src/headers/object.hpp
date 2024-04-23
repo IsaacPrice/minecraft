@@ -18,7 +18,7 @@ class Object {
 public:
     Object() {};
     // Create the Object Class
-    Object(vector<GLfloat> &vertex, vector<GLfloat> &uvs, vector<unsigned short> &indices) {
+    Object(vector<GLfloat> &vertex, vector<GLfloat> &uvs) {
         this->indices = indices;
 
         // Create the Vertex Array Object
@@ -35,7 +35,7 @@ public:
         glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
         glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), &uvs[0], GL_STATIC_DRAW);
 
-        Texture = loadPNG("content/finally.png");
+        Texture = loadPNG("content/terrain.png");
         TextureID = glGetUniformLocation(programID, "myTextureSampler");
     };  
 

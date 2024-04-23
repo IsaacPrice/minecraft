@@ -18,58 +18,58 @@
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 1920, height = 1080;
+const int width = 1366, height = 720;
 
 using namespace std;
 
+int setupWindow(int framerate, bool vsync, bool fullscreen);
+
 vector<GLfloat> vertices = {
-    -0.5f, -0.5f,  0.5f, // Bottom-left
-     0.5f, -0.5f,  0.5f, // Bottom-right
-     0.5f,  0.5f,  0.5f, // Top-right
-     0.5f,  0.5f,  0.5f, // Top-right
-    -0.5f,  0.5f,  0.5f, // Top-left
-    -0.5f, -0.5f,  0.5f, // Bottom-left
+    0.0f, 0.0f, 1.0f, // Bottom-left
+    1.0f, 0.0f, 1.0f, // Bottom-right
+    1.0f, 1.0f, 1.0f, // Top-right
+    1.0f, 1.0f, 1.0f, // Top-right
+    0.0f, 1.0f, 1.0f, // Top-left
+    0.0f, 0.0f, 1.0f, // Bottom-left
 
-    // Back face
-    -0.5f, -0.5f, -0.5f, // Bottom-right
-     0.5f, -0.5f, -0.5f, // Bottom-left
-     0.5f,  0.5f, -0.5f, // Top-left
-     0.5f,  0.5f, -0.5f, // Top-left
-    -0.5f,  0.5f, -0.5f, // Top-right
-    -0.5f, -0.5f, -0.5f, // Bottom-right
+    /*
+    0.0f, 0.0f, 0.0f, // Bottom-right
+    1.0f, 0.0f, 0.0f, // Bottom-left
+    1.0f, 1.0f, 0.0f, // Top-left
+    1.0f, 1.0f, 0.0f, // Top-left
+    0.0f, 1.0f, 0.0f, // Top-right
+    0.0f, 0.0f, 0.0f, // Bottom-right
 
-    // Top face
-    -0.5f,  0.5f, -0.5f, // Top-left
-    -0.5f,  0.5f,  0.5f, // Bottom-left
-     0.5f,  0.5f,  0.5f, // Bottom-right
-     0.5f,  0.5f,  0.5f, // Bottom-right
-     0.5f,  0.5f, -0.5f, // Top-right
-    -0.5f,  0.5f, -0.5f, // Top-left
+    0.0f, 1.0f, 0.0f, // Top-left
+    0.0f, 1.0f, 1.0f, // Bottom-left
+    1.0f, 1.0f, 1.0f, // Bottom-right
+    1.0f, 1.0f, 1.0f, // Bottom-right
+    1.0f, 1.0f, 0.0f, // Top-right
+    0.0f, 1.0f, 0.0f, // Top-left
 
-    // Bottom face
-    -0.5f, -0.5f, -0.5f, // Top-right
-     0.5f, -0.5f, -0.5f, // Top-left
-     0.5f, -0.5f,  0.5f, // Bottom-left
-     0.5f, -0.5f,  0.5f, // Bottom-left
-    -0.5f, -0.5f,  0.5f, // Bottom-right
-    -0.5f, -0.5f, -0.5f, // Top-right
+    0.0f, 0.0f, 0.0f, // Top-right
+    1.0f, 0.0f, 0.0f, // Top-left
+    1.0f, 0.0f, 1.0f, // Bottom-left
+    1.0f, 0.0f, 1.0f, // Bottom-left
+    0.0f, 0.0f, 1.0f, // Bottom-right
+    0.0f, 0.0f, 0.0f, // Top-right
 
-    // Right face
-     0.5f, -0.5f, -0.5f, // Bottom-left
-     0.5f,  0.5f, -0.5f, // Top-left
-     0.5f,  0.5f,  0.5f, // Top-right
-     0.5f,  0.5f,  0.5f, // Top-right
-     0.5f, -0.5f,  0.5f, // Bottom-right
-     0.5f, -0.5f, -0.5f, // Bottom-left
+    1.0f, 0.0f, 0.0f, // Bottom-left
+    1.0f, 1.0f, 0.0f, // Top-left
+    1.0f, 1.0f, 1.0f, // Top-right
+    1.0f, 1.0f, 1.0f, // Top-right
+    1.0f, 0.0f, 1.0f, // Bottom-right
+    1.0f, 0.0f, 0.0f, // Bottom-left
 
-    // Left face
-    -0.5f, -0.5f, -0.5f, // Bottom-right
-    -0.5f,  0.5f, -0.5f, // Top-right
-    -0.5f,  0.5f,  0.5f, // Top-left
-    -0.5f,  0.5f,  0.5f, // Top-left
-    -0.5f, -0.5f,  0.5f, // Bottom-left
-    -0.5f, -0.5f, -0.5f, // Bottom-right
+    0.0f, 0.0f, 0.0f, // Bottom-right
+    0.0f, 1.0f, 0.0f, // Top-right
+    0.0f, 1.0f, 1.0f, // Top-left
+    0.0f, 1.0f, 1.0f, // Top-left
+    0.0f, 0.0f, 1.0f, // Bottom-left
+    0.0f, 0.0f, 0.0f, // Bottom-right
+    */
 };
+
 
 vector<GLfloat> uvs = {
     // Front face
@@ -122,35 +122,15 @@ vector<GLfloat> uvs = {
 };
 
 int main() {
-	
-    // Create and initialize the program
-    glfwInit();
-    glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
-    if (window == NULL) {
-        glfwTerminate();
-        return -1;
-    }
-
-    glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
-
-    // Check for errors
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        return -1;
-    }
+    setupWindow(60, true, false);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // Create the object
-    Object triangle1(vertices, uvs, indices);
+    Object triangle1(vertices, uvs);
 
     // Create the camera
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -179,6 +159,9 @@ int main() {
 
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
+        // print out the directions
+        // printPositions();
+
         triangle1.Draw();
         // chunky.DrawChunk();
 
@@ -195,5 +178,34 @@ int main() {
     glDeleteProgram(programID);
     glfwDestroyWindow(window);
     glfwTerminate();
+    return 0;
+}
+
+
+int setupWindow(int framerate, bool vsync, bool fullscreen) {
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
+    if (window == NULL) {
+        glfwTerminate();
+        return -1;
+    }
+
+    glfwMakeContextCurrent(window);
+
+    if (vsync)
+	    glfwSwapInterval(1);
+    else if (framerate == -1)
+        glfwSwapInterval(0);
+
+    // Check for errors
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        return -1;
+    }
+
     return 0;
 }

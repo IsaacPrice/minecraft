@@ -107,3 +107,9 @@ void computeMatricesFromInputs(){
 	// For the next frame, the "last time" will be "now"
 	lastTime = currentTime;
 }
+
+void printPositions() {
+    system("cls");
+    printf("Position: (%f, %f, %f)\n", position.x, position.y, position.z);
+    printf("Direction: (%f, %f)\n", horizontalAngle, verticalAngle);
+}
