@@ -22,9 +22,76 @@ const int width = 1366, height = 720;
 
 using namespace std;
 
-int setupWindow(int framerate, bool vsync, bool fullscreen);
+enum BLOCK {
+    AIR,
+    GRASS,
+    STONE,
+    DIRT,
+    GRASS_SIDE,
+    OAK_PLANKS,
+    SMOOTH_STONE_SLAB,
+    SMOOTH_STONE,
+    BRICKS,
+    TNT_SIDE,
+    TNT_TOP,
+    TNT_BOTTOM,
+    COBWEB,
+    ROSE,
+    DANDELION,
+    WATER,
+    OAK_SAPLING,
+    COBBLESTONE,
+    BEDROCK,
+    SAND,
+    GRAVEL,
+    OAK_LOG_SIDE,
+    OAK_LOG_TOP,
+    IRON_BLOCK,
+    GOLD_BLOCK,
+    DIAMOND_BLOCK,
+    CHEST_TOP,
+    CHEST_SIDE,
+    CHEST_FRONT,
+    RED_MUSHROOM,
+    BROWN_MUSHROOM,
+    SPRUCE_SAPLING,
+    NULL,
+    GOLD_ORE,
+    IRON_ORE,
+    COAL_ORE,
+    BOOKSHELF,
+    MOSSY_COBBLESTONE,
+    OBSIDIAN,
+    GRASS_TOP_THING,
+    LONG_GRASS,
+    TOP_GRASS_AGAIN,
+    DOUBLE_CHEST_FRONT,
+    CRAFTING_TABLE_TOP,
+    FURNACE_FRONT,
+    FURNACE_SIDE,
+    DISPENSER_FRONT,
+    NULL,
+    SPONGE,
+    GLASS,
+    DIAMOND_ORE,
+    REDSTONE_ORE,
+    TRANSPARENT_LEAVES,
+    LEAVES,
+    STONE_BRICK,
+    DEAD_SHRUB,
+    FERN,
+    DOUBLE_CHEST_BACK,
+    CRAFTING_TABLE_SIDE,
+    CRAFTING_TABLE_FRONT,
+    FURNACE_LIT_FRONT,
+    STONE_AGAIN,
+
+};
+
+int setupWindow(bool vsync, bool fullscreen);
 
 vector<GLfloat> vertices = {
+    // EAST SIDE
     0.0f, 0.0f, 1.0f, // Bottom-left
     1.0f, 0.0f, 1.0f, // Bottom-right
     1.0f, 1.0f, 1.0f, // Top-right
@@ -32,7 +99,7 @@ vector<GLfloat> vertices = {
     0.0f, 1.0f, 1.0f, // Top-left
     0.0f, 0.0f, 1.0f, // Bottom-left
 
-    /*
+    // WEST SIDE
     0.0f, 0.0f, 0.0f, // Bottom-right
     1.0f, 0.0f, 0.0f, // Bottom-left
     1.0f, 1.0f, 0.0f, // Top-left
@@ -40,6 +107,7 @@ vector<GLfloat> vertices = {
     0.0f, 1.0f, 0.0f, // Top-right
     0.0f, 0.0f, 0.0f, // Bottom-right
 
+    // TOP SIDE
     0.0f, 1.0f, 0.0f, // Top-left
     0.0f, 1.0f, 1.0f, // Bottom-left
     1.0f, 1.0f, 1.0f, // Bottom-right
@@ -47,6 +115,7 @@ vector<GLfloat> vertices = {
     1.0f, 1.0f, 0.0f, // Top-right
     0.0f, 1.0f, 0.0f, // Top-left
 
+    // BOTTOM SIDE
     0.0f, 0.0f, 0.0f, // Top-right
     1.0f, 0.0f, 0.0f, // Top-left
     1.0f, 0.0f, 1.0f, // Bottom-left
@@ -54,6 +123,7 @@ vector<GLfloat> vertices = {
     0.0f, 0.0f, 1.0f, // Bottom-right
     0.0f, 0.0f, 0.0f, // Top-right
 
+    // SOUTH SIDE
     1.0f, 0.0f, 0.0f, // Bottom-left
     1.0f, 1.0f, 0.0f, // Top-left
     1.0f, 1.0f, 1.0f, // Top-right
@@ -61,13 +131,14 @@ vector<GLfloat> vertices = {
     1.0f, 0.0f, 1.0f, // Bottom-right
     1.0f, 0.0f, 0.0f, // Bottom-left
 
+    // NORTH SIDE
     0.0f, 0.0f, 0.0f, // Bottom-right
     0.0f, 1.0f, 0.0f, // Top-right
     0.0f, 1.0f, 1.0f, // Top-left
     0.0f, 1.0f, 1.0f, // Top-left
     0.0f, 0.0f, 1.0f, // Bottom-left
     0.0f, 0.0f, 0.0f, // Bottom-right
-    */
+
 };
 
 
@@ -123,7 +194,7 @@ vector<GLfloat> uvs = {
 
 int main() {
 
-    setupWindow(60, true, false);
+    setupWindow(false, false);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
@@ -182,7 +253,7 @@ int main() {
 }
 
 
-int setupWindow(int framerate, bool vsync, bool fullscreen) {
+int setupWindow(bool vsync, bool fullscreen) {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -197,10 +268,11 @@ int setupWindow(int framerate, bool vsync, bool fullscreen) {
 
     glfwMakeContextCurrent(window);
 
-    if (vsync)
+    if (vsync) {
 	    glfwSwapInterval(1);
-    else if (framerate == -1)
+    } else {
         glfwSwapInterval(0);
+    }
 
     // Check for errors
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {

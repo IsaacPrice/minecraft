@@ -17,19 +17,17 @@ glm::mat4 getProjectionMatrix(){
 }
 
 
-// Initial position : on +Z
 glm::vec3 position = glm::vec3( 0, 0, 5 ); 
-// Initial horizontal angle : toward -Z
 float horizontalAngle = 3.14f;
-// Initial vertical angle : none
 float verticalAngle = 0.0f;
-// Initial Field of View
-float initialFoV = 45.0f;
+float initialFoV = 60.0f;
 
 float speed = 3.0f; // 3 units / second
 float mouseSpeed = 0.001f;
 
 float aspectRatio = (float) width / (float) height;
+
+float radian = 180.f / 3.14159265359f;
 
 void computeMatricesFromInputs(){
 
@@ -84,14 +82,6 @@ void computeMatricesFromInputs(){
 	if (glfwGetKey( window, GLFW_KEY_A ) == GLFW_PRESS){
 		position -= right * deltaTime * speed;
 	}
-	/*
-	if (glfwGetKey( window, GLFW_KEY_SPACE ) == GLFW_PRESS) {
-		position += up * deltaTime * speed;
-	}
-	if (glfwGetKey( window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS) {
-		position -= up * deltaTime * speed;
-	}
-	*/
 
 	float FoV = initialFoV;// - 5 * glfwGetMouseWheel(); // Now GLFW 3 requires setting up a callback for this. It's a bit too complicated for this beginner's tutorial, so it's disabled instead.
 
@@ -108,8 +98,32 @@ void computeMatricesFromInputs(){
 	lastTime = currentTime;
 }
 
+float getNormalRotation(float angle) {
+	while (!(angle >= -180 && angle <= 180)) {
+		if (angle < -180) {
+			angle += 360;
+		} else if (angle > 180) {
+			angle -= 360;
+		}
+	}
+	return angle;
+}
+
 void printPositions() {
     system("cls");
-    printf("Position: (%f, %f, %f)\n", position.x, position.y, position.z);
-    printf("Direction: (%f, %f)\n", horizontalAngle, verticalAngle);
+	printf("Position: (%f, %f, %f)\n", position.x, position.y, position.z);
+	float horizontalDegrees = getNormalRotation(horizontalAngle * radian);
+	float verticalDegrees = getNormalRotation(verticalAngle * radian);
+    printf("Direction: (%f, %f)\n", horizontalDegrees, verticalDegrees);
+	// Print which direction they are facing
+	if (horizontalDegrees >= -45 && horizontalDegrees <= 45) {
+		printf("Facing: East\n");
+	} else if (horizontalDegrees >= 45 && horizontalDegrees <= 135) {
+		printf("Facing: South\n");
+	} else if (horizontalDegrees >= 135 || horizontalDegrees <= -135) {
+		printf("Facing: West\n");
+	} else if (horizontalDegrees >= -135 && horizontalDegrees <= -45) {
+		printf("Facing: North\n");
+	}
+
 }

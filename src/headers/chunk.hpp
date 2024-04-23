@@ -30,25 +30,66 @@ vector<vec3> getSideVertex(vec3 startingPos, SIDE part) {
     if (part == TOP) {
         return {
             startingPos + {0, blockWidth, 0},
-            startingPos + {}
-        }
+            startingPos + (0, blockWidth, blockWidth),
+            startingPos + (blockWidth, blockWidth, blockWidth),
+            startingPos + (blockWidth, blockWidth, blockWidth),
+            startingPos + {blockWidth, blockWidth, 0},
+            startingPos + {0, blockWidth, 0}
+        };
     }
     if (part == BOTTOM) {
-
+        return {
+            startingPos + {0, 0, 0},
+            startingPos + (blockWidth, 0, 0),
+            startingPos + (blockWidth, 0, blockWidth),
+            startingPos + (blockWidth, 0, blockWidth),
+            startingPos + {0, 0, blockWidth},
+            startingPos + {0, 0, 0}
+        };
     }
     if (part == NORTH) {
-
+        return {
+            startingPos + {0, 0, 0},
+            startingPos + (0, blockWidth, 0),
+            startingPos + (0, blockWidth, blockWidth),
+            startingPos + (0, blockWidth, blockWidth),
+            startingPos + (0, 0, blockWidth),
+            startingPos + {0, 0, 0}
+        };
     }
     if (part == EAST) {
-
+        return {
+            startingPos + {0, 0, blockWidth},
+            startingPos + (blockWidth, 0, blockWidth),
+            startingPos + (blockWidth, blockWidth, blockWidth),
+            startingPos + (blockWidth, blockWidth, blockWidth),
+            startingPos + (0, blockWidth, blockWidth),
+            startingPos + {0, 0, blockWidth}
+        };
     }
     if (part == SOUTH) {
-
+        return {
+            startingPos + {blockWidth, 0, 0},
+            startingPos + (blockWidth, blockWidth, 0),
+            startingPos + (blockWidth, blockWidth, blockWidth),
+            startingPos + (blockWidth, blockWidth, blockWidth),
+            startingPos + (blockWidth, 0, blockWidth),
+            startingPos + {blockWidth, 0, 0}
+        };
     }
     if (part == WEST) {
-        
+        return {
+            startingPos + {0, 0, 0},
+            startingPos + (blockWidth, 0, 0),
+            startingPos + (blockWidth, blockWidth, 0),
+            startingPos + (blockWidth, blockWidth, 0),
+            startingPos + (0, blockWidth, 0),
+            startingPos + {0, 0, 0}
+        };
     }
 }
+
+vector<vec3> getTextureCoords(BLOCK )
 
 using namespace std;
 
