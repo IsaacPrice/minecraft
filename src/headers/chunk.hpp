@@ -233,14 +233,14 @@ void Chunk::MakeVertexObject() {
                     vector<vec2> tempUV = getTextureCoords((BLOCK)blockID);
 
                     if (vertices.size() == 0) {
-                        vertices = getSideVertex(blockPos, (SIDE)i);
+                        vertices = tempVertices;
                     }
                     else {
                         vertices.insert(vertices.end(), tempVertices.begin(), tempVertices.end());
                     }
 
                     if (uvCoords.size() == 0) {
-                        uvCoords = getTextureCoords((BLOCK)blockID);
+                        uvCoords = tempUV;
                     }
                     else {
                         uvCoords.insert(uvCoords.end(), tempUV.begin(), tempUV.end());
