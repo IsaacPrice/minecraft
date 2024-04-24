@@ -15,6 +15,7 @@
 //#include "headers/chunk.hpp"
 #include "headers/controls.hpp"
 #include "headers/object.hpp"
+#include "headers/Fbo.hpp"
 
 GLFWwindow* window;
 GLuint programID;
@@ -132,6 +133,9 @@ int main() {
     // Create the object
     Object triangle1(vertices, uvs);
 
+    //Create FBO?
+    Fbo fbo(window, width, height);
+
     // Create the camera
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -148,6 +152,9 @@ int main() {
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
+        
+        fbo.bindFrameBuffer();
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(programID);
 
@@ -165,6 +172,9 @@ int main() {
         triangle1.Draw();
         // chunky.DrawChunk();
 
+        fbo.unbindFrameBuffer();
+        fbo.resolveToScreen();
+
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		}
@@ -175,6 +185,7 @@ int main() {
     }
 
     // Close the program
+    fbo.cleanUp();
     glDeleteProgram(programID);
     glfwDestroyWindow(window);
     glfwTerminate();
