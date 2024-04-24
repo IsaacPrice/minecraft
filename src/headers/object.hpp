@@ -10,6 +10,7 @@
 extern GLuint programID;
 
 using namespace std;
+using namespace glm;
 
 // Function Prototype
 GLuint loadPNG(const char *imagepath, bool useAlphaChannel = false);
@@ -18,8 +19,8 @@ class Object {
 public:
     Object() {};
     // Create the Object Class
-    Object(vector<GLfloat> &vertex, vector<GLfloat> &uvs) {
-        this->indices = indices;
+    Object(vector<vec3> vertex, vector<vec2> &uvs) {
+        vertices_size = vertex.size();
 
         // Create the Vertex Array Object
         glGenVertexArrays(1, &VertexArrayID);
@@ -28,12 +29,12 @@ public:
         // Setup the vertex buffer
         glGenBuffers(1, &vertexBuffer);
         glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-        glBufferData(GL_ARRAY_BUFFER, vertex.size() * sizeof(GLfloat), &vertex[0], GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, vertex.size() * sizeof(vec3), &vertex[0], GL_STATIC_DRAW);
 
         // Setup the UV buffer
         glGenBuffers(1, &uvBuffer);
         glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
-        glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(GLfloat), &uvs[0], GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(vec2), &uvs[0], GL_STATIC_DRAW);
 
         Texture = loadPNG("content/terrain.png");
         TextureID = glGetUniformLocation(programID, "myTextureSampler");
@@ -63,7 +64,7 @@ public:
         glUniform1i(TextureID, 0);
 
         // Draw the object
-        glDrawArrays(GL_TRIANGLES, 0, 12 * 3);
+        glDrawArrays(GL_TRIANGLES, 0, vertices_size);
 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
@@ -75,10 +76,8 @@ private:
     GLuint VertexArrayID;
     GLuint vertexBuffer;
     GLuint uvBuffer;
-    GLuint elementBuffer;
-    vector<unsigned short> indices;
 
-    int vertices;
+    uint vertices_size;
 };
 
 GLuint loadPNG(const char *imagepath, bool useAlphaChannel) {

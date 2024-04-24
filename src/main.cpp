@@ -12,9 +12,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "headers/shader.hpp"
-//#include "headers/chunk.hpp"
+#include "headers/chunk.hpp"
 #include "headers/controls.hpp"
-#include "headers/object.hpp"
 
 GLFWwindow* window;
 GLuint programID;
@@ -22,174 +21,107 @@ const int width = 1366, height = 720;
 
 using namespace std;
 
-enum BLOCK {
-    AIR,
-    GRASS,
-    STONE,
-    DIRT,
-    GRASS_SIDE,
-    OAK_PLANKS,
-    SMOOTH_STONE_SLAB,
-    SMOOTH_STONE,
-    BRICKS,
-    TNT_SIDE,
-    TNT_TOP,
-    TNT_BOTTOM,
-    COBWEB,
-    ROSE,
-    DANDELION,
-    WATER,
-    OAK_SAPLING,
-    COBBLESTONE,
-    BEDROCK,
-    SAND,
-    GRAVEL,
-    OAK_LOG_SIDE,
-    OAK_LOG_TOP,
-    IRON_BLOCK,
-    GOLD_BLOCK,
-    DIAMOND_BLOCK,
-    CHEST_TOP,
-    CHEST_SIDE,
-    CHEST_FRONT,
-    RED_MUSHROOM,
-    BROWN_MUSHROOM,
-    SPRUCE_SAPLING,
-    NULL,
-    GOLD_ORE,
-    IRON_ORE,
-    COAL_ORE,
-    BOOKSHELF,
-    MOSSY_COBBLESTONE,
-    OBSIDIAN,
-    GRASS_TOP_THING,
-    LONG_GRASS,
-    TOP_GRASS_AGAIN,
-    DOUBLE_CHEST_FRONT,
-    CRAFTING_TABLE_TOP,
-    FURNACE_FRONT,
-    FURNACE_SIDE,
-    DISPENSER_FRONT,
-    NULL,
-    SPONGE,
-    GLASS,
-    DIAMOND_ORE,
-    REDSTONE_ORE,
-    TRANSPARENT_LEAVES,
-    LEAVES,
-    STONE_BRICK,
-    DEAD_SHRUB,
-    FERN,
-    DOUBLE_CHEST_BACK,
-    CRAFTING_TABLE_SIDE,
-    CRAFTING_TABLE_FRONT,
-    FURNACE_LIT_FRONT,
-    STONE_AGAIN,
-
-};
-
 int setupWindow(bool vsync, bool fullscreen);
 
-vector<GLfloat> vertices = {
+vector<vec3> vertices = {
     // EAST SIDE
-    0.0f, 0.0f, 1.0f, // Bottom-left
-    1.0f, 0.0f, 1.0f, // Bottom-right
-    1.0f, 1.0f, 1.0f, // Top-right
-    1.0f, 1.0f, 1.0f, // Top-right
-    0.0f, 1.0f, 1.0f, // Top-left
-    0.0f, 0.0f, 1.0f, // Bottom-left
+    {0.0f, 0.0f, 1.0f}, // Bottom-left
+    {1.0f, 0.0f, 1.0f}, // Bottom-right
+    {1.0f, 1.0f, 1.0f}, // Top-right
+    {1.0f, 1.0f, 1.0f}, // Top-right
+    {0.0f, 1.0f, 1.0f}, // Top-left
+    {0.0f, 0.0f, 1.0f}, // Bottom-left
 
     // WEST SIDE
-    0.0f, 0.0f, 0.0f, // Bottom-right
-    1.0f, 0.0f, 0.0f, // Bottom-left
-    1.0f, 1.0f, 0.0f, // Top-left
-    1.0f, 1.0f, 0.0f, // Top-left
-    0.0f, 1.0f, 0.0f, // Top-right
-    0.0f, 0.0f, 0.0f, // Bottom-right
+    {0.0f, 0.0f, 0.0f}, // Bottom-right
+    {1.0f, 0.0f, 0.0f}, // Bottom-left
+    {1.0f, 1.0f, 0.0f}, // Top-left
+    {1.0f, 1.0f, 0.0f}, // Top-left
+    {0.0f, 1.0f, 0.0f}, // Top-right
+    {0.0f, 0.0f, 0.0f}, // Bottom-right
 
     // TOP SIDE
-    0.0f, 1.0f, 0.0f, // Top-left
-    0.0f, 1.0f, 1.0f, // Bottom-left
-    1.0f, 1.0f, 1.0f, // Bottom-right
-    1.0f, 1.0f, 1.0f, // Bottom-right
-    1.0f, 1.0f, 0.0f, // Top-right
-    0.0f, 1.0f, 0.0f, // Top-left
+    {0.0f, 1.0f, 0.0f}, // Top-left
+    {0.0f, 1.0f, 1.0f}, // Bottom-left
+    {1.0f, 1.0f, 1.0f}, // Bottom-right
+    {1.0f, 1.0f, 1.0f}, // Bottom-right
+    {1.0f, 1.0f, 0.0f}, // Top-right
+    {0.0f, 1.0f, 0.0f}, // Top-left
 
     // BOTTOM SIDE
-    0.0f, 0.0f, 0.0f, // Top-right
-    1.0f, 0.0f, 0.0f, // Top-left
-    1.0f, 0.0f, 1.0f, // Bottom-left
-    1.0f, 0.0f, 1.0f, // Bottom-left
-    0.0f, 0.0f, 1.0f, // Bottom-right
-    0.0f, 0.0f, 0.0f, // Top-right
+    {0.0f, 0.0f, 0.0f}, // Top-right
+    {1.0f, 0.0f, 0.0f}, // Top-left
+    {1.0f, 0.0f, 1.0f}, // Bottom-left
+    {1.0f, 0.0f, 1.0f}, // Bottom-left
+    {0.0f, 0.0f, 1.0f}, // Bottom-right
+    {0.0f, 0.0f, 0.0f}, // Top-right
 
     // SOUTH SIDE
-    1.0f, 0.0f, 0.0f, // Bottom-left
-    1.0f, 1.0f, 0.0f, // Top-left
-    1.0f, 1.0f, 1.0f, // Top-right
-    1.0f, 1.0f, 1.0f, // Top-right
-    1.0f, 0.0f, 1.0f, // Bottom-right
-    1.0f, 0.0f, 0.0f, // Bottom-left
+    {1.0f, 0.0f, 0.0f}, // Bottom-left
+    {1.0f, 1.0f, 0.0f}, // Top-left
+    {1.0f, 1.0f, 1.0f}, // Top-right
+    {1.0f, 1.0f, 1.0f}, // Top-right
+    {1.0f, 0.0f, 1.0f}, // Bottom-right
+    {1.0f, 0.0f, 0.0f}, // Bottom-left
 
     // NORTH SIDE
-    0.0f, 0.0f, 0.0f, // Bottom-right
-    0.0f, 1.0f, 0.0f, // Top-right
-    0.0f, 1.0f, 1.0f, // Top-left
-    0.0f, 1.0f, 1.0f, // Top-left
-    0.0f, 0.0f, 1.0f, // Bottom-left
-    0.0f, 0.0f, 0.0f, // Bottom-right
-
+    {0.0f, 0.0f, 0.0f}, // Bottom-right
+    {0.0f, 1.0f, 0.0f}, // Top-right
+    {0.0f, 1.0f, 1.0f}, // Top-left
+    {0.0f, 1.0f, 1.0f}, // Top-left
+    {0.0f, 0.0f, 1.0f}, // Bottom-left
+    {0.0f, 0.0f, 0.0f}, // Bottom-right
 };
 
 
-vector<GLfloat> uvs = {
+vector<vec2> uvs = {
     // Front face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+    {0.125f, 0.0625f},
+    {0.1875f, 0.0625f},
+    {0.1875f, 0.0f},
+    {0.1875f, 0.0f},
+    {0.125f, 0.0f},
+    {0.125f, 0.0625f},
 
     // Back face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+    {0.125f, 0.0625f},
+    {0.1875f, 0.0625f},
+    {0.1875f, 0.0f},
+    {0.1875f, 0.0f},
+    {0.125f, 0.0f},
+    {0.125f, 0.0625f},
 
     // Top face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+    {0.125f, 0.0625f},
+    {0.1875f, 0.0625f},
+    {0.1875f, 0.0f},
+    {0.1875f, 0.0f},
+    {0.125f, 0.0f},
+    {0.125f, 0.0625f},
 
     // Bottom face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+    {0.125f, 0.0625f},
+    {0.1875f, 0.0625f},
+    {0.1875f, 0.0f},
+    {0.1875f, 0.0f},
+    {0.125f, 0.0f},
+    {0.125f, 0.0625f},
 
     // Right face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+    {0.125f, 0.0625f},
+    {0.1875f, 0.0625f},
+    {0.1875f, 0.0f},
+    {0.1875f, 0.0f},
+    {0.125f, 0.0f},
+    {0.125f, 0.0625f},
 
     // Left face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
+    {0.125f, 0.0625f},
+    {0.1875f, 0.0625f},
+    {0.1875f, 0.0f},
+    {0.1875f, 0.0f},
+    {0.125f, 0.0f},
+    {0.125f, 0.0625f},
 };
 
 int main() {
@@ -215,7 +147,7 @@ int main() {
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
 
-	//Chunk chunky;
+	Chunk chunky;
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -234,7 +166,7 @@ int main() {
         // printPositions();
 
         triangle1.Draw();
-        // chunky.DrawChunk();
+        chunky.DrawChunk();
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
