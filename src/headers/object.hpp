@@ -19,7 +19,7 @@ class Object {
 public:
     Object() {};
     // Create the Object Class
-    Object(vector<vec3> vertex, vector<vec2> &uvs) {
+    Object(vector<vec3> &vertex, vector<vec2> &uvs) {
         vertices_size = vertex.size();
 
         // Create the Vertex Array Object
@@ -46,6 +46,27 @@ public:
         glDeleteVertexArrays(1, &VertexArrayID);
         glDeleteTextures(1, &Texture);
     };
+
+    void Create(vector<vec3> &vertex, vector<vec2> &uvs) {
+        vertices_size = vertex.size();
+
+        // Create the Vertex Array Object
+        glGenVertexArrays(1, &VertexArrayID);
+        glBindVertexArray(VertexArrayID);
+
+        // Setup the vertex buffer
+        glGenBuffers(1, &vertexBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, vertex.size() * sizeof(vec3), &vertex[0], GL_STATIC_DRAW);
+
+        // Setup the UV buffer
+        glGenBuffers(1, &uvBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
+        glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(vec2), &uvs[0], GL_STATIC_DRAW);
+
+        Texture = loadPNG("content/terrain.png");
+        TextureID = glGetUniformLocation(programID, "myTextureSampler");
+    }
 
     void Draw() {
         // Bind the vertex array

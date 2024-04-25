@@ -73,7 +73,6 @@ vector<vec3> vertices = {
     {0.0f, 0.0f, 0.0f}, // Bottom-right
 };
 
-
 vector<vec2> uvs = {
     // Front face
     {0.125f, 0.0625f},
@@ -143,7 +142,7 @@ int main() {
 	glfwSetCursorPos(window, width/2, height/2);
 
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
 

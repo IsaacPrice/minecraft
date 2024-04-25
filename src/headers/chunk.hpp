@@ -92,67 +92,69 @@ enum BLOCK {
 };
 
 float blockWidth = 1 / 16;
+float blockHeight = 1 / 64;
 
 // Function to return the vertex of a side part
-vector<vec3> getSideVertex(vec3 startingPos, SIDE part) {
+vector<vec3> getSideVertex(float x, float y, float z, SIDE part) {
     if (part == TOP) {
-        return {
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + 0}
+        vector<vec3> toReturn = {
+            {x, y + blockHeight, z},
+            {x, y + blockHeight, z + blockWidth},
+            {x + blockWidth, y + blockHeight, z + blockWidth},
+            {x + blockWidth, y + blockHeight, z + blockWidth},
+            {x + blockWidth, y + blockHeight, z},
+            {x, y + blockHeight, z}
         };
+        return toReturn;
     }
     else if (part == BOTTOM) {
         return {
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + 0}
+            {x, y, z},
+            {x + blockWidth, y, z},
+            {x + blockWidth, y, z + blockWidth},
+            {x + blockWidth, y, z + blockWidth},
+            {x, y, z + blockWidth},
+            {x, y, z}
         };
     }
     else if (part == NORTH) {
         return {
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + 0},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + 0}
+            {x, y, z},
+            {x, y + blockHeight, z},
+            {x, y + blockHeight, z + blockWidth},
+            {x, y + blockHeight, z + blockWidth},
+            {x, y, z + blockWidth},
+            {x, y, z}
         };
     }
     else if (part == EAST) {
         return {
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + blockWidth}
+            {x, y, z + blockWidth},
+            {x + blockWidth, y, z + blockWidth},
+            {x + blockWidth, y + blockHeight, z + blockWidth},
+            {x + blockWidth, y + blockHeight, z + blockWidth},
+            {x, y + blockHeight, z + blockWidth},
+            {x, y, z + blockWidth}
         };
     }
     else if (part == SOUTH) {
         return {
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + blockWidth},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + 0}
+            {x + blockWidth, y, z},
+            {x + blockWidth, y + blockHeight, z},
+            {x + blockWidth, y + blockHeight, z + blockWidth},
+            {x + blockWidth, y + blockHeight, z + blockWidth},
+            {x + blockWidth, y, z + blockWidth},
+            {x + blockWidth, y, z}
         };
     }
     else {
         return {
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + 0, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + blockWidth, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + 0, startingPos.y + blockWidth, startingPos.z + 0},
-            {startingPos.x + 0, startingPos.y + 0, startingPos.z + 0}
+            {x, y, z},
+            {x + blockWidth, y, z},
+            {x + blockWidth, y + blockHeight, z},
+            {x + blockWidth, y + blockHeight, z},
+            {x, y + blockHeight, z},
+            {x, y, z}
         };
     }
 }
@@ -188,7 +190,7 @@ public:
 
 private:
     unsigned short blockMap[16][64][16] = {0}; // 16 wide, 64 tall, and 16 long
-    Object* chunk;
+    Object chunk;
     vector<vec3> vertices;
     vector<vec2> uvCoords;
 };
@@ -197,19 +199,19 @@ Chunk::Chunk() {
     // This is the temperary terrain generation
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            blockMap[i][0][j] = 2;
+            blockMap[i][1][j] = 2;
         }
     }
 
     MakeVertexObject();
 
     // Create a new chunk object
-    chunk = new Object(vertices, uvCoords);
+    chunk.Create(vertices, uvCoords);
 }
 
 void Chunk::DrawChunk() {
     // Draw the chunk
-    chunk->Draw();
+    chunk.Draw();
 }
 
 void Chunk::MakeVertexObject() {
@@ -229,7 +231,7 @@ void Chunk::MakeVertexObject() {
                 // Get the vertices and UV coords of the block
                 for (unsigned i = 0; i < 6; i++) {
                     // add the new vectors to the vertices vector
-                    vector<vec3> tempVertices = getSideVertex(blockPos, (SIDE)i);
+                    vector<vec3> tempVertices = getSideVertex(blockPos.x, blockPos.y, blockPos.z, (SIDE)i);
                     vector<vec2> tempUV = getTextureCoords((BLOCK)blockID);
 
                     if (vertices.size() == 0) {
@@ -250,4 +252,11 @@ void Chunk::MakeVertexObject() {
             }
         }
     }
+
+    // Print out all of the vertices
+    /*
+    for (unsigned i = 0; i < vertices.size(); i++) {
+        printf("Vertex %d: %f, %f, %f\n", i, vertices[i].x, vertices[i].y, vertices[i].z);
+    }
+    */
 }
