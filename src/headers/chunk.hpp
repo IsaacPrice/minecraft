@@ -1,13 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <iostream>
 #include <string>
 #include <cstdlib>
 #include <vector>
-
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #include "object.hpp"
 #include "block_data.hpp"
@@ -128,17 +122,24 @@ public:
     Chunk(int start_x, int start_y);
 
     // create chunk
-    void Generate(int start_x, int start_y);
+    void Setup(int start_x, int start_y);
+    void Generate();
+    void CreateObject();
+    void Cleanup();
 
     // Create the vertex object
-    void MakeVertexObject();
+    void MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ);
 
     // Draw the chunk
     void Draw();
 
+    // The world position of the chunk
+    vec2 chunkPos;
+
+    // The block data of the chunk
+    unsigned short blockMap[16][64][16] = { AIR };
+
 private:
-    // block data for the chunk
-    unsigned short blockMap[16][64][16] = {0}; // 16 wide, 64 tall, and 16 long
 
     // The object that gets rendered
     Object chunk;
@@ -146,18 +147,34 @@ private:
     // The vertices and uvCoords, only for the VBO generation
     vector<vec3> vertices;
     vector<vec2> uvCoords;
-
-    // The world position of the chunk
-    vec2 chunkPos;
 };
 
 // Constructor for the chunk
 Chunk::Chunk(int start_x, int start_y) {
-    Generate(start_x, start_y);
+    Setup(start_x, start_y);
+}
+
+void Chunk::Setup(int start_x, int start_y) {
+    // Generate the chunk
+    Generate();
+
+    // Set the chunk world position
+    chunkPos = {(float)start_x, (float)start_y};
+
+    // Create the vertex object
+    Chunk blankChunk;
+    MakeVertexObject(blankChunk, blankChunk, blankChunk, blankChunk);
+
+    // Create a new chunk object
+    chunk.Create(vertices, uvCoords);
+
+    // Delete the vertices and uvCoords
+    vertices.clear();
+    uvCoords.clear();
 }
 
 // Generate the chunk
-void Chunk::Generate(int start_x, int start_y) {
+void Chunk::Generate() {
     // Generate the height of each x,z
     unsigned short heightMap[16][16] = {0};
     for (int i = 0; i < 16; i++) {
@@ -210,17 +227,15 @@ void Chunk::Generate(int start_x, int start_y) {
             }
         }
     }
+}
 
-    // Set the chunk world position
-    chunkPos = {(float)start_x, (float)start_y};
-
-    // Create the vertex object
-    MakeVertexObject();
-
-    // Create a new chunk object
+// Creates the object for the chunk
+void Chunk::CreateObject() {
     chunk.Create(vertices, uvCoords);
+}
 
-    // Delete the vertices and uvCoords
+// Deletes the vertices and uvCoords
+void Chunk::Cleanup() {
     vertices.clear();
     uvCoords.clear();
 }
@@ -231,7 +246,8 @@ void Chunk::Draw() {
 }
 
 // Go through the block map and create the vertices and uvCoords for the VBO. Currently only creates the faces that face air, but later will cull faces from the surrounding chunks
-void Chunk::MakeVertexObject() {
+void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ) {
+
     // Go down up, adding all corners to the array
     for (unsigned x = 0; x < 16; x++) {
         for (unsigned y = 0; y < 64; y++) {
@@ -254,6 +270,7 @@ void Chunk::MakeVertexObject() {
                 else if (blockMap[x][y + 1][z] == 0) {
                     sides[0] = true;
                 }
+
                 // BOTTOM
                 if (y == 0) {
                     sides[1] = true;
@@ -261,33 +278,45 @@ void Chunk::MakeVertexObject() {
                 else if (blockMap[x][y - 1][z] == 0) {
                     sides[1] = true;
                 }
+
                 // NORTH
-                if (x == 0) {
+                if (x == 0 && negativeX.blockMap[15][y][z] == 0) {
                     sides[2] = true;
                 }
-                else if (blockMap[x - 1][y][z] == 0) {
-                    sides[2] = true;
+                else if (x!=0) {
+                    if (blockMap[x - 1][y][z] == 0) {
+                        sides[2] = true;
+                    }
                 }
+
                 // EAST
-                if (z == 15) {
+                if (z == 15 && positiveZ.blockMap[x][y][0] == 0) {
                     sides[3] = true;
                 }
-                else if (blockMap[x][y][z + 1] == 0) {
-                    sides[3] = true;
+                else if (z != 15) {
+                    if (blockMap[x][y][z + 1] == 0) {
+                        sides[3] = true;
+                    }
                 }
+
                 // SOUTH
-                if (x == 15) {
+                if (x == 15 && positiveX.blockMap[0][y][z] == 0) {
                     sides[4] = true;
                 }
-                else if (blockMap[x + 1][y][z] == 0) {
-                    sides[4] = true;
+                if (x != 15) {
+                    if (blockMap[x + 1][y][z] == 0) {
+                        sides[4] = true;
+                    }
                 }
+
                 // WEST
-                if (z == 0) {
+                if (z == 0 && negativeZ.blockMap[x][y][15] == 0) {
                     sides[5] = true;
                 }
-                else if (blockMap[x][y][z - 1] == 0) {
-                    sides[5] = true;
+                if (z != 0) {
+                    if (blockMap[x][y][z - 1] == 0) {
+                        sides[5] = true;
+                    }
                 }
 
                 // Add the vertices to the array

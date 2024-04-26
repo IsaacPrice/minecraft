@@ -3,16 +3,13 @@
 #include <cstring>
 #include <vector>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "headers/world.hpp"
 #include "headers/shader.hpp"
-#include "headers/chunk.hpp"
 #include "headers/controls.hpp"
 
 GLFWwindow* window;
@@ -46,13 +43,8 @@ int main() {
     // Generate the seed
     unsigned long int seed = time(NULL);
 
-    // make 144 chunks, 12x12
-    Chunk chunks[144];
-    for (int x = 0; x < 12; x++) {
-        for (int z = 0; z < 12; z++) {
-            chunks[x * 12 + z].Generate(x, z);
-        }
-    }
+    // Create the world
+    World world(seed, 8);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -70,9 +62,8 @@ int main() {
 
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-        for (int i = 0; i < 144; i++) {
-            chunks[i].Draw();
-        }
+        // Render the world
+        world.Render(vec3(0, 0, 0));
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
