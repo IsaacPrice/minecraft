@@ -23,106 +23,6 @@ using namespace std;
 
 int setupWindow(bool vsync, bool fullscreen);
 
-vector<vec3> vertices = {
-    // EAST SIDE
-    {0.0f, 0.0f, 1.0f}, // Bottom-left
-    {1.0f, 0.0f, 1.0f}, // Bottom-right
-    {1.0f, 1.0f, 1.0f}, // Top-right
-    {1.0f, 1.0f, 1.0f}, // Top-right
-    {0.0f, 1.0f, 1.0f}, // Top-left
-    {0.0f, 0.0f, 1.0f}, // Bottom-left
-
-    // WEST SIDE
-    {0.0f, 0.0f, 0.0f}, // Bottom-right
-    {1.0f, 0.0f, 0.0f}, // Bottom-left
-    {1.0f, 1.0f, 0.0f}, // Top-left
-    {1.0f, 1.0f, 0.0f}, // Top-left
-    {0.0f, 1.0f, 0.0f}, // Top-right
-    {0.0f, 0.0f, 0.0f}, // Bottom-right
-
-    // TOP SIDE
-    {0.0f, 1.0f, 0.0f}, // Top-left
-    {0.0f, 1.0f, 1.0f}, // Bottom-left
-    {1.0f, 1.0f, 1.0f}, // Bottom-right
-    {1.0f, 1.0f, 1.0f}, // Bottom-right
-    {1.0f, 1.0f, 0.0f}, // Top-right
-    {0.0f, 1.0f, 0.0f}, // Top-left
-
-    // BOTTOM SIDE
-    {0.0f, 0.0f, 0.0f}, // Top-right
-    {1.0f, 0.0f, 0.0f}, // Top-left
-    {1.0f, 0.0f, 1.0f}, // Bottom-left
-    {1.0f, 0.0f, 1.0f}, // Bottom-left
-    {0.0f, 0.0f, 1.0f}, // Bottom-right
-    {0.0f, 0.0f, 0.0f}, // Top-right
-
-    // SOUTH SIDE
-    {1.0f, 0.0f, 0.0f}, // Bottom-left
-    {1.0f, 1.0f, 0.0f}, // Top-left
-    {1.0f, 1.0f, 1.0f}, // Top-right
-    {1.0f, 1.0f, 1.0f}, // Top-right
-    {1.0f, 0.0f, 1.0f}, // Bottom-right
-    {1.0f, 0.0f, 0.0f}, // Bottom-left
-
-    // NORTH SIDE
-    {0.0f, 0.0f, 0.0f}, // Bottom-right
-    {0.0f, 1.0f, 0.0f}, // Top-right
-    {0.0f, 1.0f, 1.0f}, // Top-left
-    {0.0f, 1.0f, 1.0f}, // Top-left
-    {0.0f, 0.0f, 1.0f}, // Bottom-left
-    {0.0f, 0.0f, 0.0f}, // Bottom-right
-};
-
-vector<vec2> uvs = {
-    // Front face
-    {0.125f, 0.0625f},
-    {0.1875f, 0.0625f},
-    {0.1875f, 0.0f},
-    {0.1875f, 0.0f},
-    {0.125f, 0.0f},
-    {0.125f, 0.0625f},
-
-    // Back face
-    {0.125f, 0.0625f},
-    {0.1875f, 0.0625f},
-    {0.1875f, 0.0f},
-    {0.1875f, 0.0f},
-    {0.125f, 0.0f},
-    {0.125f, 0.0625f},
-
-    // Top face
-    {0.125f, 0.0625f},
-    {0.1875f, 0.0625f},
-    {0.1875f, 0.0f},
-    {0.1875f, 0.0f},
-    {0.125f, 0.0f},
-    {0.125f, 0.0625f},
-
-    // Bottom face
-    {0.125f, 0.0625f},
-    {0.1875f, 0.0625f},
-    {0.1875f, 0.0f},
-    {0.1875f, 0.0f},
-    {0.125f, 0.0f},
-    {0.125f, 0.0625f},
-
-    // Right face
-    {0.125f, 0.0625f},
-    {0.1875f, 0.0625f},
-    {0.1875f, 0.0f},
-    {0.1875f, 0.0f},
-    {0.125f, 0.0f},
-    {0.125f, 0.0625f},
-
-    // Left face
-    {0.125f, 0.0625f},
-    {0.1875f, 0.0625f},
-    {0.1875f, 0.0f},
-    {0.1875f, 0.0f},
-    {0.125f, 0.0f},
-    {0.125f, 0.0625f},
-};
-
 int main() {
 
     setupWindow(false, false);
@@ -130,9 +30,6 @@ int main() {
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
-
-    // Create the object
-    Object triangle1(vertices, uvs);
 
     // Create the camera
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -142,11 +39,20 @@ int main() {
 	glfwSetCursorPos(window, width/2, height/2);
 
     glEnable(GL_DEPTH_TEST);
-    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
 
-	Chunk chunky;
+    // Generate the seed
+    unsigned long int seed = time(NULL);
+
+    // make 256 chunks, 16x16
+    Chunk chunks[64];
+    for (int x = 0; x < 8; x++) {
+        for (int z = 0; z < 8; z++) {
+            chunks[x * 8 + z].Generate(x, z);
+        }
+    }
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -159,13 +65,14 @@ int main() {
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
+        // print out the directions
+        // printPositions("clear");
+
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-        // print out the directions
-        // printPositions();
-
-        triangle1.Draw();
-        chunky.DrawChunk();
+        for (int i = 0; i < 64; i++) {
+            chunks[i].Draw();
+        }
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);

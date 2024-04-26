@@ -109,8 +109,8 @@ float getNormalRotation(float angle) {
 	return angle;
 }
 
-void printPositions() {
-    system("cls");
+void printPositions(const char* message = "cls") {
+    system(message);
 	printf("Position: (%f, %f, %f)\n", position.x, position.y, position.z);
 	float horizontalDegrees = getNormalRotation(horizontalAngle * radian);
 	float verticalDegrees = getNormalRotation(verticalAngle * radian);
