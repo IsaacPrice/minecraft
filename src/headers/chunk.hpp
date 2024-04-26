@@ -10,91 +10,17 @@
 #include <GLFW/glfw3.h>
 
 #include "object.hpp"
+#include "block_data.hpp"
 
 extern GLuint programID;
 
 using namespace std;
 using namespace glm;
 
-// This will be for appending vertices
-enum SIDE {
-    TOP,
-    BOTTOM, 
-    NORTH,
-    EAST,
-    SOUTH,
-    WEST,
-    NO_SIDE
-};
-
-enum BLOCK {
-    AIR,
-    GRASS,
-    STONE,
-    DIRT,
-    GRASS_SIDE,
-    OAK_PLANKS,
-    SMOOTH_STONE_SLAB,
-    SMOOTH_STONE,
-    BRICKS,
-    TNT_SIDE,
-    TNT_TOP,
-    TNT_BOTTOM,
-    COBWEB,
-    ROSE,
-    DANDELION,
-    WATER,
-    OAK_SAPLING,
-    COBBLESTONE,
-    BEDROCK,
-    SAND,
-    GRAVEL,
-    OAK_LOG_SIDE,
-    OAK_LOG_TOP,
-    IRON_BLOCK,
-    GOLD_BLOCK,
-    DIAMOND_BLOCK,
-    CHEST_TOP,
-    CHEST_SIDE,
-    CHEST_FRONT,
-    RED_MUSHROOM,
-    BROWN_MUSHROOM,
-    SPRUCE_SAPLING,
-    NONE1,
-    GOLD_ORE,
-    IRON_ORE,
-    COAL_ORE,
-    BOOKSHELF,
-    MOSSY_COBBLESTONE,
-    OBSIDIAN,
-    GRASS_TOP_THING,
-    LONG_GRASS,
-    TOP_GRASS_AGAIN,
-    DOUBLE_CHEST_FRONT,
-    CRAFTING_TABLE_TOP,
-    FURNACE_FRONT,
-    FURNACE_SIDE,
-    DISPENSER_FRONT,
-    NONE2,
-    SPONGE,
-    GLASS,
-    DIAMOND_ORE,
-    REDSTONE_ORE,
-    TRANSPARENT_LEAVES,
-    LEAVES,
-    STONE_BRICK,
-    DEAD_SHRUB,
-    FERN,
-    DOUBLE_CHEST_BACK,
-    CRAFTING_TABLE_SIDE,
-    CRAFTING_TABLE_FRONT,
-    FURNACE_LIT_FRONT,
-    STONE_AGAIN,
-};
-
+// Width of each block
 float blockWidth = 0.0625f;
 
-// Function to return the vertex of a side part
+// Returns the vertices for the side of the block requested
 vector<vec3> getSideVertex(float x, float y, float z, SIDE part) {
     if (part == TOP) {
         return {
@@ -158,6 +84,7 @@ vector<vec3> getSideVertex(float x, float y, float z, SIDE part) {
     }
 }
 
+// Returns the texture coordinates for the block requested
 vector<vec2> getTextureCoords(BLOCK blockID, SIDE side) {
     bool altCoords = false;
 
@@ -199,31 +126,37 @@ class Chunk {
 public:
     Chunk() {};
     Chunk(int start_x, int start_y);
-    //~Chunk();
 
     // create chunk
     void Generate(int start_x, int start_y);
 
-    void Draw();
-
-    // Engine Functions
+    // Create the vertex object
     void MakeVertexObject();
 
-    // Coding Functions
-    void DoubleLoop(void (*function)(int x, int y));
+    // Draw the chunk
+    void Draw();
 
 private:
+    // block data for the chunk
     unsigned short blockMap[16][64][16] = {0}; // 16 wide, 64 tall, and 16 long
+
+    // The object that gets rendered
     Object chunk;
+
+    // The vertices and uvCoords, only for the VBO generation
     vector<vec3> vertices;
     vector<vec2> uvCoords;
+
+    // The world position of the chunk
     vec2 chunkPos;
 };
 
+// Constructor for the chunk
 Chunk::Chunk(int start_x, int start_y) {
     Generate(start_x, start_y);
 }
 
+// Generate the chunk
 void Chunk::Generate(int start_x, int start_y) {
     // Generate the height of each x,z
     unsigned short heightMap[16][16] = {0};
@@ -235,7 +168,7 @@ void Chunk::Generate(int start_x, int start_y) {
     }
 
     // Smooth the heightmap n_times
-    int n_times = 3;
+    int n_times = 1;
     for (int i = 0; i < n_times; i++) {
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
@@ -278,8 +211,10 @@ void Chunk::Generate(int start_x, int start_y) {
         }
     }
 
+    // Set the chunk world position
     chunkPos = {(float)start_x, (float)start_y};
 
+    // Create the vertex object
     MakeVertexObject();
 
     // Create a new chunk object
@@ -290,13 +225,13 @@ void Chunk::Generate(int start_x, int start_y) {
     uvCoords.clear();
 }
 
+// Draw the chunk
 void Chunk::Draw() {
-    // Draw the chunk
     chunk.Draw();
 }
 
+// Go through the block map and create the vertices and uvCoords for the VBO. Currently only creates the faces that face air, but later will cull faces from the surrounding chunks
 void Chunk::MakeVertexObject() {
-
     // Go down up, adding all corners to the array
     for (unsigned x = 0; x < 16; x++) {
         for (unsigned y = 0; y < 64; y++) {

@@ -24,33 +24,33 @@ using namespace std;
 int setupWindow(bool vsync, bool fullscreen);
 
 int main() {
-
+    // Create the window
     setupWindow(false, false);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
-    // Create the camera
+    // Setup the input modes
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
 	glfwPollEvents();
 	glfwSetCursorPos(window, width/2, height/2);
 
+    // Set the opengl settings
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
+    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
     // Generate the seed
     unsigned long int seed = time(NULL);
 
-    // make 256 chunks, 16x16
-    Chunk chunks[64];
-    for (int x = 0; x < 8; x++) {
-        for (int z = 0; z < 8; z++) {
-            chunks[x * 8 + z].Generate(x, z);
+    // make 144 chunks, 12x12
+    Chunk chunks[144];
+    for (int x = 0; x < 12; x++) {
+        for (int z = 0; z < 12; z++) {
+            chunks[x * 12 + z].Generate(x, z);
         }
     }
 
@@ -70,7 +70,7 @@ int main() {
 
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
-        for (int i = 0; i < 64; i++) {
+        for (int i = 0; i < 144; i++) {
             chunks[i].Draw();
         }
 
