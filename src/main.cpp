@@ -45,6 +45,8 @@ int main() {
     // Generate the seed
     uint64_t seed = time(NULL);
 
+    cout << "Seed: " << seed << "\n";
+
     // Create the world
     World world(seed, 16);
 
