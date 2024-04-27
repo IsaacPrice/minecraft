@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "headers/world.hpp"
 #include "headers/shader.hpp"
@@ -15,16 +16,17 @@
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 1366, height = 720;
+const int width = 2560, height = 1440;
 
 using namespace std;
+using namespace glm;
 
 int setupWindow(bool vsync, bool fullscreen);
 
 int main() {
 
     // Create the window
-    setupWindow(false, false);
+    setupWindow(true, true);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
@@ -41,6 +43,12 @@ int main() {
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
     //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+
+    // Set light data
+    vec3 lightDirection = vec3(0.f, 0.f, 1.f);
+
+    // Get the uniform locations
+    GLint lightDirUniformLocation = glGetUniformLocation(programID, "lightDirection");
 
     // Generate the seed
     uint64_t seed = time(NULL);
@@ -65,6 +73,7 @@ int main() {
         // printPositions("clear");
 
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+        glUniform3fv(lightDirUniformLocation, 1, value_ptr(lightDirection));
 
         // Render the world
         world.Render(vec3(0, 0, 0));
@@ -93,7 +102,12 @@ int setupWindow(bool vsync, bool fullscreen) {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
+    if (fullscreen) {
+        window = glfwCreateWindow(width, height, "Minecraft", glfwGetPrimaryMonitor(), NULL);
+    }
+    else {
+        window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
+    }
     if (window == NULL) {
         glfwTerminate();
         return -1;

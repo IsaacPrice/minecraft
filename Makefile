@@ -1,10 +1,10 @@
 CC=g++
 CFLAGS=-Iinclude
-LDFLAGS=-Llib -lglfw -lGL -ldl
+LDFLAGS=-Llib -lglfw3 -lgdi32 -lopengl32
 
 .PHONY: app clean
 
-app: src/main.cpp src/glad.c
+app: src/main.cpp src/glad.c 
 	$(CC) $(CFLAGS) -o app src/main.cpp src/glad.c $(LDFLAGS)
 
 clean:

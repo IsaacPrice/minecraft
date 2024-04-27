@@ -2,122 +2,17 @@
 #include <string>
 #include <cstdlib>
 #include <vector>
+#include <cstdlib>
 
 #include "object.hpp"
 #include "block_data.hpp"
-
-//#include "generation.hpp"
 #include "fast_noise.hpp"
+#include "chunk_helper.hpp"
 
 extern GLuint programID;
 
 using namespace std;
 using namespace glm;
-
-// Width of each block
-float blockWidth = 0.0625f;
-
-// Returns the vertices for the side of the block requested
-vector<vec3> getSideVertex(float x, float y, float z, SIDE part) {
-    if (part == TOP) {
-        return {
-            {x, y + blockWidth, z},
-            {x, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z},
-            {x, y + blockWidth, z}
-        };;
-    }
-    else if (part == BOTTOM) {
-        return {
-            {x, y, z},
-            {x + blockWidth, y, z},
-            {x + blockWidth, y, z + blockWidth},
-            {x + blockWidth, y, z + blockWidth},
-            {x, y, z + blockWidth},
-            {x, y, z}
-        };
-    }
-    else if (part == NORTH) {
-        return {
-            {x, y, z},
-            {x, y + blockWidth, z},
-            {x, y + blockWidth, z + blockWidth},
-            {x, y + blockWidth, z + blockWidth},
-            {x, y, z + blockWidth},
-            {x, y, z}
-        };
-    }
-    else if (part == EAST) {
-        return {
-            {x, y, z + blockWidth},
-            {x + blockWidth, y, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x, y + blockWidth, z + blockWidth},
-            {x, y, z + blockWidth}
-        };
-    }
-    else if (part == SOUTH) {
-        return {
-            {x + blockWidth, y, z},
-            {x + blockWidth, y + blockWidth, z},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y, z + blockWidth},
-            {x + blockWidth, y, z}
-        };
-    }
-    else {
-        return {
-            {x, y, z},
-            {x + blockWidth, y, z},
-            {x + blockWidth, y + blockWidth, z},
-            {x + blockWidth, y + blockWidth, z},
-            {x, y + blockWidth, z},
-            {x, y, z}
-        };
-    }
-}
-
-// Returns the texture coordinates for the block requested
-vector<vec2> getTextureCoords(BLOCK blockID, SIDE side) {
-    bool altCoords = false;
-
-    if (blockID == GRASS && side == BOTTOM){
-        blockID = DIRT;
-    }
-    else if (blockID == GRASS && side != TOP) {
-        blockID = GRASS_SIDE;
-        if (side == NORTH || side == SOUTH)
-            altCoords = true;
-    }
-
-    // Calculate the starting point of the texture
-    float startX = ((blockID - 1) % 16) * 0.0625;
-    float startY = (int((blockID - 1) / 16)) * 0.0625;
-
-    if (altCoords) {
-        return {
-            {startX, startY + 0.0625},
-            {startX, startY},
-            {startX + 0.0625, startY},
-            {startX + 0.0625, startY},
-            {startX + 0.0625, startY + 0.0625},
-            {startX, startY + 0.0625},
-        };
-    }
-
-    return {
-        {startX + 0.0625, startY + 0.0625},
-        {startX, startY + 0.0625},
-        {startX, startY},
-        {startX, startY},
-        {startX + 0.0625, startY},
-        {startX + 0.0625, startY + 0.0625},
-    };
-}
 
 class Chunk {
 public:
@@ -125,9 +20,12 @@ public:
     Chunk(int start_x, int start_y);
 
     // create chunk
-    void Generate(FastNoise &noise);
+    void Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt);
     void CreateObject();
     void Cleanup();
+
+    // Getters
+    bool isChunkSaved();
 
     // Create the vertex object
     void MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ);
@@ -146,7 +44,6 @@ private:
     // The object that gets rendered
     Object chunk;
 
-    //Compiling shader : src/shaders/shader.frag
     // The vertices and uvCoords, only for the VBO generation
     vector<vec3> vertices;
     vector<vec2> uvCoords;
@@ -158,37 +55,84 @@ Chunk::Chunk(int start_x, int start_y) {
 }
 
 // Generate the chunk
-void Chunk::Generate(FastNoise &noise) {
+void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) {
+    
     // Generate the height of each x,z
     unsigned short heightMap[16][16] = {0};
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            double worldX = (chunkPos.x * 16 + i) * 1.5f;
-            double worldZ = (chunkPos.y * 16 + j) * 1.5f;
-            int height = (int)(noise.GetNoise(worldX, worldZ) * 20 + 58);
+            double worldX = (chunkPos.x * 16 + i) * 3.125f;
+            double worldZ = (chunkPos.y * 16 + j) * 3.125f;
+            int height = (int)(heightGen.GetNoise(worldX, worldZ) * 30 + 45);
             heightMap[i][j] = height;
         }
     }
 
-    // Generate the block map
+    // Generate the Stone Layer
     for (int x = 0; x < 16; x++) {
         for (int z = 0; z < 16; z++) {
-            int dirt_height = heightMap[x][z] - (3 + (rand() % 2));
             for (int y = 0; y < 255; y++) {
-                if (y == 0) {
-                    blockMap[x][y][z] = BEDROCK;
-                }
-                else if (y < dirt_height) {
+                if (y <= heightMap[x][z]) {
                     blockMap[x][y][z] = STONE;
                 }
-                else if (y < heightMap[x][z]) {
+                else {
+                    blockMap[x][y][z] = AIR;
+                }
+            }
+        }
+    }
+
+    // Generate Patches of gravel
+    for (int x = 0; x < 16; x++) {
+        for (int z = 0; z < 16; z++) {
+            for (int y = 0; y < 255; y++) {
+                if (blockMap[x][y][z] == AIR)
+                    continue;
+
+                double worldX = (chunkPos.x * 16 + x) * 3;
+                double worldZ = (chunkPos.y * 16 + z) * 3;
+
+                if (gravel.GetNoise(worldX, (double)(y * 3), worldZ) < 0.3) { 
+                    blockMap[x][y][z] = GRAVEL;
+                }
+            }
+        }
+    }
+
+    // Generate Patches of Dirt
+    for (int x = 0; x < 16; x++) {
+        for (int z = 0; z < 16; z++) {
+            for (int y = 0; y < 255; y++) {
+                if (blockMap[x][y][z] == AIR)
+                    continue;
+
+                double worldX = (chunkPos.x * 16 + x) * 3;
+                double worldZ = (chunkPos.y * 16 + z) * 3;
+
+                if (dirt.GetNoise(worldX, (double)(y * 3), worldZ) < 0.3) { 
                     blockMap[x][y][z] = DIRT;
+                }
+            }
+        }
+    }
+
+    // Add in the dirt and grass
+    for (int x = 0; x < 16; x++) {
+        for (int z = 0; z < 16; z++) {
+            for (int y = 0; y < 255; y++) {
+                if (blockMap[x][y][z] == AIR)
+                    continue;
+
+                // generate a random number from 3 to 4
+                int dirtLayer = 3 + rand() % 2;
+                if (y == 0) {
+                    blockMap[x][y][z] = BEDROCK;
                 }
                 else if (y == heightMap[x][z]) {
                     blockMap[x][y][z] = GRASS;
                 }
-                else {
-                    blockMap[x][y][z] = AIR;
+                else if (y >= heightMap[x][z] - dirtLayer) {
+                    blockMap[x][y][z] = DIRT;
                 }
             }
         }
@@ -204,6 +148,11 @@ void Chunk::CreateObject() {
 void Chunk::Cleanup() {
     vertices.clear();
     uvCoords.clear();
+}
+
+// Returns if the chunk has been saved
+bool Chunk::isChunkSaved() {
+    return false;
 }
 
 // Draw the chunk

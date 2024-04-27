@@ -14,8 +14,27 @@ public:
         this->renderDistance = renderDistance;
 
         // Set the noise settings
-        noise.SetSeed(seed);
-        noise.SetNoiseType(FastNoise::Perlin);
+        heightMap.SetSeed(seed);
+        heightMap.SetNoiseType(FastNoise::PerlinFractal);
+        heightMap.SetFrequency(0.00153f);
+        heightMap.SetFractalOctaves(16);
+
+        gravel.SetSeed(seed);
+        gravel.SetNoiseType(FastNoise::Cellular);
+        gravel.SetFrequency(0.03f);
+        gravel.SetFractalOctaves(6);
+        gravel.SetFractalLacunarity(1.86f);
+        gravel.SetFractalGain(3.0f);
+        gravel.SetCellularReturnType(FastNoise::Distance2Add);
+
+        dirt.SetSeed(seed + 1);
+        dirt.SetNoiseType(FastNoise::Cellular);
+        dirt.SetFrequency(0.03f);
+        dirt.SetFractalOctaves(6);
+        dirt.SetFractalLacunarity(1.86f);
+        dirt.SetFractalGain(3.0f);
+        dirt.SetCellularReturnType(FastNoise::Distance2Add);
+        
 
         // Generate the chunks
         GenerateChunks();
@@ -44,7 +63,7 @@ public:
         for (int i = 0; i < renderDistance; i++) {
             for (int j = 0; j < renderDistance; j++) {
                 currentChunks[i][j].chunkPos = { i - halfRenderDistance, j - halfRenderDistance };
-                currentChunks[i][j].Generate(noise);
+                currentChunks[i][j].Generate(heightMap, gravel, dirt);
             }
         }
 
@@ -76,7 +95,9 @@ private:
     unsigned short renderDistance;
 
     // Noise
-    FastNoise noise;
+    FastNoise heightMap;
+    FastNoise gravel;
+    FastNoise dirt;
 
     // The chunks
     vector<vector<Chunk>> currentChunks;
