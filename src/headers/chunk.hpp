@@ -6,6 +6,9 @@
 #include "object.hpp"
 #include "block_data.hpp"
 
+//#include "generation.hpp"
+#include "fast_noise.hpp"
+
 extern GLuint programID;
 
 using namespace std;
@@ -122,8 +125,7 @@ public:
     Chunk(int start_x, int start_y);
 
     // create chunk
-    void Setup(int start_x, int start_y);
-    void Generate();
+    void Generate(FastNoise &noise);
     void CreateObject();
     void Cleanup();
 
@@ -137,13 +139,14 @@ public:
     vec2 chunkPos;
 
     // The block data of the chunk
-    unsigned short blockMap[16][64][16] = { AIR };
+    unsigned short blockMap[16][255][16] = { AIR };
 
 private:
 
     // The object that gets rendered
     Object chunk;
 
+    //Compiling shader : src/shaders/shader.frag
     // The vertices and uvCoords, only for the VBO generation
     vector<vec3> vertices;
     vector<vec2> uvCoords;
@@ -151,56 +154,19 @@ private:
 
 // Constructor for the chunk
 Chunk::Chunk(int start_x, int start_y) {
-    Setup(start_x, start_y);
-}
-
-void Chunk::Setup(int start_x, int start_y) {
-    // Generate the chunk
-    Generate();
-
-    // Set the chunk world position
-    chunkPos = {(float)start_x, (float)start_y};
-
-    // Create the vertex object
-    Chunk blankChunk;
-    MakeVertexObject(blankChunk, blankChunk, blankChunk, blankChunk);
-
-    // Create a new chunk object
-    chunk.Create(vertices, uvCoords);
-
-    // Delete the vertices and uvCoords
-    vertices.clear();
-    uvCoords.clear();
+    chunkPos = { start_x, start_y };
 }
 
 // Generate the chunk
-void Chunk::Generate() {
+void Chunk::Generate(FastNoise &noise) {
     // Generate the height of each x,z
     unsigned short heightMap[16][16] = {0};
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            int height = rand() % 8 + 16;
+            double worldX = (chunkPos.x * 16 + i) * 1.5f;
+            double worldZ = (chunkPos.y * 16 + j) * 1.5f;
+            int height = (int)(noise.GetNoise(worldX, worldZ) * 20 + 58);
             heightMap[i][j] = height;
-        }
-    }
-
-    // Smooth the heightmap n_times
-    int n_times = 1;
-    for (int i = 0; i < n_times; i++) {
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                int total = 0;
-                int count = 0;
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        if (x + dx < 0 || x + dx >= 16 || z + dz < 0 || z + dz >= 16)
-                            continue;
-                        total += heightMap[x + dx][z + dz];
-                        count++;
-                    }
-                }
-                heightMap[x][z] = total / count;
-            }
         }
     }
 
@@ -208,7 +174,7 @@ void Chunk::Generate() {
     for (int x = 0; x < 16; x++) {
         for (int z = 0; z < 16; z++) {
             int dirt_height = heightMap[x][z] - (3 + (rand() % 2));
-            for (int y = 0; y < 64; y++) {
+            for (int y = 0; y < 255; y++) {
                 if (y == 0) {
                     blockMap[x][y][z] = BEDROCK;
                 }
@@ -250,7 +216,7 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
 
     // Go down up, adding all corners to the array
     for (unsigned x = 0; x < 16; x++) {
-        for (unsigned y = 0; y < 64; y++) {
+        for (unsigned y = 0; y < 255; y++) {
             for (unsigned z = 0; z < 16; z++) {
                 // Ignore the block if its air
                 int blockID = blockMap[x][y][z];
@@ -264,7 +230,7 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
                 bool sides[] = {false, false, false, false, false, false};
 
                 // TOP
-                if (y == 63) {
+                if (y == 254) {
                     sides[0] = true;
                 }
                 else if (blockMap[x][y + 1][z] == 0) {
@@ -345,5 +311,4 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
             }
         }
     }
-    printf("VBO generated\n");
 }

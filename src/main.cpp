@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include <vector>
+#include <iostream>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -21,6 +22,7 @@ using namespace std;
 int setupWindow(bool vsync, bool fullscreen);
 
 int main() {
+
     // Create the window
     setupWindow(false, false);
 
@@ -41,10 +43,10 @@ int main() {
     //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
     // Generate the seed
-    unsigned long int seed = time(NULL);
+    uint64_t seed = time(NULL);
 
     // Create the world
-    World world(seed, 8);
+    World world(seed, 16);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
