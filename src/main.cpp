@@ -16,7 +16,7 @@
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 2560, height = 1440;
+const int width = 1280, height = 720;
 
 using namespace std;
 using namespace glm;
@@ -26,7 +26,7 @@ int setupWindow(bool vsync, bool fullscreen);
 int main() {
 
     // Create the window
-    setupWindow(true, true);
+    setupWindow(true, false);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );

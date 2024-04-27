@@ -82,7 +82,7 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) {
         }
     }
 
-    // Generate Patches of gravel
+    // Generate Patches of gravel and dirt
     for (int x = 0; x < 16; x++) {
         for (int z = 0; z < 16; z++) {
             for (int y = 0; y < 255; y++) {
@@ -95,19 +95,6 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) {
                 if (gravel.GetNoise(worldX, (double)(y * 3), worldZ) < 0.3) { 
                     blockMap[x][y][z] = GRAVEL;
                 }
-            }
-        }
-    }
-
-    // Generate Patches of Dirt
-    for (int x = 0; x < 16; x++) {
-        for (int z = 0; z < 16; z++) {
-            for (int y = 0; y < 255; y++) {
-                if (blockMap[x][y][z] == AIR)
-                    continue;
-
-                double worldX = (chunkPos.x * 16 + x) * 3;
-                double worldZ = (chunkPos.y * 16 + z) * 3;
 
                 if (dirt.GetNoise(worldX, (double)(y * 3), worldZ) < 0.3) { 
                     blockMap[x][y][z] = DIRT;
@@ -115,6 +102,7 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) {
             }
         }
     }
+
 
     // Add in the dirt and grass
     for (int x = 0; x < 16; x++) {

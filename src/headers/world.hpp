@@ -80,6 +80,8 @@ public:
                 currentChunks[i][j].Cleanup();
             }
         }
+
+        cout << "Finished Generating Terrain" << endl;
     }
 
     void changeRenderDistance(unsigned short newRenderDistance) {

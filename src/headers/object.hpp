@@ -131,60 +131,10 @@ GLuint loadPNG(const char *imagepath, bool useAlphaChannel) {
     // Set up texture parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-
-    // Manually generate mipmaps
-    int level = 0;
-    int mipWidth = width;
-    int mipHeight = height;
-    unsigned char* mipData = data; // Start with the original data
-    unsigned char* newData;
-
-    while (mipWidth > 1 || mipHeight > 1) {
-        int newWidth = std::max(1, mipWidth / 2);
-        int newHeight = std::max(1, mipHeight / 2);
-        newData = new unsigned char[newWidth * newHeight * nrChannels];
-
-        // Custom downsample function - implement this according to your needs
-        downsample(mipData, newData, mipWidth, mipHeight, newWidth, newHeight, nrChannels);
-
-        level++;
-        glTexImage2D(GL_TEXTURE_2D, level, format, newWidth, newHeight, 0, format, GL_UNSIGNED_BYTE, newData);
-
-        // Prepare for next iteration
-        if (mipData != data) { // Do not delete the original data pointer
-            delete[] mipData;
-        }
-        mipData = newData;
-        mipWidth = newWidth;
-        mipHeight = newHeight;
-    }
-
-    if (mipData != data) { // Clean up if last mipData is not the original
-        delete[] mipData;
-    }
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
 
     stbi_image_free(data);
 
     return textureID;
-}
-
-void downsample(unsigned char* src, unsigned char* dst, int srcWidth, int srcHeight, int dstWidth, int dstHeight, int channels) {
-    // Example: Simple box filter downsampling
-    for (int y = 0; y < dstHeight; ++y) {
-        for (int x = 0; x < dstWidth; ++x) {
-            int px = x * 2;
-            int py = y * 2;
-            for (int c = 0; c < channels; ++c) {
-                int index = (y * dstWidth + x) * channels + c;
-                int sum = 0;
-                for (int dy = 0; dy < 2; ++dy) {
-                    for (int dx = 0; dx < 2; ++dx) {
-                        int srcIndex = ((py + dy) * srcWidth + (px + dx)) * channels + c;
-                        sum += src[srcIndex];
-                    }
-                }
-                dst[index] = sum / 4;
-            }
-        }
-    }
 }
