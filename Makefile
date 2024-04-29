@@ -1,6 +1,6 @@
 CC=g++
 CFLAGS=-Iinclude
-LDFLAGS=-Llib -lglfw -lGL -ldl
+LDFLAGS=-Llib -lglfw3 -lgdi32 -lopengl32
 
 .PHONY: app clean
 

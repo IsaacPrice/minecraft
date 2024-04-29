@@ -36,6 +36,10 @@ public:
     // Draw the chunk
     void Draw();
 
+    bool operator==(const Chunk &other) {
+        return chunkPos == other.chunkPos;
+    }
+
     // The world position of the chunk
     vec2 chunkPos;
 

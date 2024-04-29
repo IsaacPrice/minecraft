@@ -10,9 +10,6 @@ condition_variable chunkCondition;
 
 Chunk blankChunk;
 
-// TODO: modify this class to not draw the chunks, but add them and remove them from a vector in another thread
-// The vector will be in the main thread and will be used to render the chunks
-
 class World {
 public:
     World(unsigned long seed, unsigned short renderDistance) {
@@ -75,7 +72,7 @@ public:
             }
         }
 
-        tempChunks = currentChunks;
+        //tempChunks = currentChunks;
 
         cout << "Finished Generating Terrain" << endl;
         lock.unlock();
@@ -84,6 +81,8 @@ public:
 
     void UpdateChunks(vec3 playerPos) {
 
+        unique_lock<mutex> lock(chunkMutex);
+
         // Get the player's chunk position
         int playerChunkX = (int)playerPos.x;
         int playerChunkZ = (int)playerPos.z;
@@ -91,43 +90,25 @@ public:
         // Go through the chunks and remove the ones that are too far away and add the ones that are inside
         for (int i = 0; i < renderDistance; i++) {
             for (int j = 0; j < renderDistance; j++) {
-                int chunkX = tempChunks[i * renderDistance + j].chunkPos.x;
-                int chunkZ = tempChunks[i * renderDistance + j].chunkPos.y;
+                int chunkX = currentChunks[i * renderDistance + j].chunkPos.x;
+                int chunkZ = currentChunks[i * renderDistance + j].chunkPos.y;
 
                 // Check if the chunk is too far away
                 if (abs(playerChunkX - chunkX) > renderDistance / 2 || abs(playerChunkZ - chunkZ) > renderDistance / 2) {
-                    tempChunks.erase(tempChunks.begin() + i * renderDistance + j);
+                    
+
                 }
                 
             }
         }
 
-        // resize the vector to the render distance ^2
-        tempChunks.resize(renderDistance * renderDistance);
 
-        // Refills the vector with the chunks that are inside the render distance
-        for (int i = 0; i < renderDistance; i++) {
-            for (int j = 0; j < renderDistance; j++) {
-                int chunkX = tempChunks[i * renderDistance + j].chunkPos.x;
-                int chunkZ = tempChunks[i * renderDistance + j].chunkPos.y;
 
-                if (find(tempChunks.begin(), tempChunks.end(), tempChunks[i * renderDistance + j]) == tempChunks.end()) {    
-                    tempChunks[i * renderDistance + j].Generate(heightMap, gravel, dirt);
-                    tempChunks[i * renderDistance + j].MakeVertexObject(
-                        (i == 0) ? blankChunk : tempChunks[(i-1) * renderDistance + j],
-                        (i == renderDistance - 1) ? blankChunk : tempChunks[(i+1) * renderDistance + j],
-                        (j == 0) ? blankChunk : tempChunks[i * renderDistance + j-1],
-                        (j == renderDistance - 1) ? blankChunk : tempChunks[i * renderDistance + j+1]
-                    );
-                    tempChunks[i * renderDistance + j].CreateObject();
-                    tempChunks[i * renderDistance + j].Cleanup();
-                }
-            }
-        }
+        // resize the vector to the render distance ^2 currentChunks
+        // currentChunks.resize(renderDistance * renderDistance);
 
 
         // Take control of the mutex and update the chunks
-        unique_lock<mutex> lock(chunkMutex);
         // Set the current chunks to the temp chunks
         
         lock.unlock();

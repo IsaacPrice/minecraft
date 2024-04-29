@@ -16,7 +16,7 @@
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 1280, height = 720;
+const int width = 2256, height = 1504;
 
 using namespace std;
 using namespace glm;
@@ -26,14 +26,14 @@ int setupWindow(bool vsync, bool fullscreen);
 int main() {
 
     // Create the window
-    setupWindow(true, false);
+    setupWindow(true, true);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
     // Setup the input modes
-	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+	//glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwPollEvents();
 	glfwSetCursorPos(window, width/2, height/2);
@@ -56,7 +56,7 @@ int main() {
     cout << "Seed: " << seed << "\n";
 
     // Create the world
-    World world(seed, 12);
+    World world(seed, 8);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -105,6 +105,7 @@ int main() {
 
 int setupWindow(bool vsync, bool fullscreen) {
     glfwInit();
+    glfwWindowHint(GLFW_SAMPLES, 0);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
