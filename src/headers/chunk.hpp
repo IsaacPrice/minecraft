@@ -3,6 +3,9 @@
 #include <cstdlib>
 #include <vector>
 #include <cstdlib>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include "object.hpp"
 #include "block_data.hpp"

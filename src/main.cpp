@@ -56,7 +56,7 @@ int main() {
     cout << "Seed: " << seed << "\n";
 
     // Create the world
-    World world(seed, 16);
+    World world(seed, 12);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -75,8 +75,16 @@ int main() {
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
         glUniform3fv(lightDirUniformLocation, 1, value_ptr(lightDirection));
 
+        // Update the world
+        world.UpdateChunks(position);
+
         // Render the world
-        world.Render(vec3(0, 0, 0));
+        unique_lock<mutex> lock(chunkMutex);
+        chunkCondition.wait(lock, [] { return !currentChunks.empty(); });
+        for (Chunk& chunk : currentChunks) {
+            chunk.Draw();
+        }
+        lock.unlock();
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
