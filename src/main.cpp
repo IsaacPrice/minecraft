@@ -2,159 +2,64 @@
 #include <stdlib.h>
 #include <cstring>
 #include <vector>
-
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include <iostream>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
+#include "headers/world.hpp"
 #include "headers/shader.hpp"
-//#include "headers/chunk.hpp"
 #include "headers/controls.hpp"
-#include "headers/object.hpp"
-#include "headers/Fbo.hpp"
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 1366, height = 720;
+const int width = 2256, height = 1504;
 
 using namespace std;
+using namespace glm;
 
-int setupWindow(int framerate, bool vsync, bool fullscreen);
-
-vector<GLfloat> vertices = {
-    0.0f, 0.0f, 1.0f, // Bottom-left
-    1.0f, 0.0f, 1.0f, // Bottom-right
-    1.0f, 1.0f, 1.0f, // Top-right
-    1.0f, 1.0f, 1.0f, // Top-right
-    0.0f, 1.0f, 1.0f, // Top-left
-    0.0f, 0.0f, 1.0f, // Bottom-left
-
-    /*
-    0.0f, 0.0f, 0.0f, // Bottom-right
-    1.0f, 0.0f, 0.0f, // Bottom-left
-    1.0f, 1.0f, 0.0f, // Top-left
-    1.0f, 1.0f, 0.0f, // Top-left
-    0.0f, 1.0f, 0.0f, // Top-right
-    0.0f, 0.0f, 0.0f, // Bottom-right
-
-    0.0f, 1.0f, 0.0f, // Top-left
-    0.0f, 1.0f, 1.0f, // Bottom-left
-    1.0f, 1.0f, 1.0f, // Bottom-right
-    1.0f, 1.0f, 1.0f, // Bottom-right
-    1.0f, 1.0f, 0.0f, // Top-right
-    0.0f, 1.0f, 0.0f, // Top-left
-
-    0.0f, 0.0f, 0.0f, // Top-right
-    1.0f, 0.0f, 0.0f, // Top-left
-    1.0f, 0.0f, 1.0f, // Bottom-left
-    1.0f, 0.0f, 1.0f, // Bottom-left
-    0.0f, 0.0f, 1.0f, // Bottom-right
-    0.0f, 0.0f, 0.0f, // Top-right
-
-    1.0f, 0.0f, 0.0f, // Bottom-left
-    1.0f, 1.0f, 0.0f, // Top-left
-    1.0f, 1.0f, 1.0f, // Top-right
-    1.0f, 1.0f, 1.0f, // Top-right
-    1.0f, 0.0f, 1.0f, // Bottom-right
-    1.0f, 0.0f, 0.0f, // Bottom-left
-
-    0.0f, 0.0f, 0.0f, // Bottom-right
-    0.0f, 1.0f, 0.0f, // Top-right
-    0.0f, 1.0f, 1.0f, // Top-left
-    0.0f, 1.0f, 1.0f, // Top-left
-    0.0f, 0.0f, 1.0f, // Bottom-left
-    0.0f, 0.0f, 0.0f, // Bottom-right
-    */
-};
-
-
-vector<GLfloat> uvs = {
-    // Front face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
-
-    // Back face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
-
-    // Top face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
-
-    // Bottom face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
-
-    // Right face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
-
-    // Left face
-    0.125f, 0.0625f,
-    0.1875f, 0.0625f,
-    0.1875f, 0.0f,
-    0.1875f, 0.0f,
-    0.125f, 0.0f,
-    0.125f, 0.0625f,
-};
+int setupWindow(bool vsync, bool fullscreen);
 
 int main() {
 
-    setupWindow(60, true, false);
+    // Create the window
+    setupWindow(true, true);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
-    // Create the object
-    Object triangle1(vertices, uvs);
-
-    //Create FBO?
-    Fbo fbo(window, width, height);
-
-    // Create the camera
-	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+    // Setup the input modes
+	//glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
 	glfwPollEvents();
 	glfwSetCursorPos(window, width/2, height/2);
 
+    // Set the opengl settings
     glEnable(GL_DEPTH_TEST);
-    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
+    //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
-	//Chunk chunky;
+    // Set light data
+    vec3 lightDirection = vec3(0.f, 0.f, 1.f);
+
+    // Get the uniform locations
+    GLint lightDirUniformLocation = glGetUniformLocation(programID, "lightDirection");
+
+    // Generate the seed
+    uint64_t seed = time(NULL);
+
+    cout << "Seed: " << seed << "\n";
+
+    // Create the world
+    World world(seed, 8);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
-        
-        fbo.bindFrameBuffer();
-
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(programID);
 
@@ -164,16 +69,22 @@ int main() {
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
-        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
-
         // print out the directions
-        // printPositions();
+        // printPositions("clear");
 
-        triangle1.Draw();
-        // chunky.DrawChunk();
+        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+        glUniform3fv(lightDirUniformLocation, 1, value_ptr(lightDirection));
 
-        fbo.unbindFrameBuffer();
-        fbo.resolveToScreen();
+        // Update the world
+        world.UpdateChunks(position);
+
+        // Render the world
+        unique_lock<mutex> lock(chunkMutex);
+        chunkCondition.wait(lock, [] { return !currentChunks.empty(); });
+        for (Chunk& chunk : currentChunks) {
+            chunk.Draw();
+        }
+        lock.unlock();
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -185,7 +96,6 @@ int main() {
     }
 
     // Close the program
-    fbo.cleanUp();
     glDeleteProgram(programID);
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -193,14 +103,20 @@ int main() {
 }
 
 
-int setupWindow(int framerate, bool vsync, bool fullscreen) {
+int setupWindow(bool vsync, bool fullscreen) {
     glfwInit();
+    glfwWindowHint(GLFW_SAMPLES, 0);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
+    if (fullscreen) {
+        window = glfwCreateWindow(width, height, "Minecraft", glfwGetPrimaryMonitor(), NULL);
+    }
+    else {
+        window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
+    }
     if (window == NULL) {
         glfwTerminate();
         return -1;
@@ -208,10 +124,11 @@ int setupWindow(int framerate, bool vsync, bool fullscreen) {
 
     glfwMakeContextCurrent(window);
 
-    if (vsync)
+    if (vsync) {
 	    glfwSwapInterval(1);
-    else if (framerate == -1)
+    } else {
         glfwSwapInterval(0);
+    }
 
     // Check for errors
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
