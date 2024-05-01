@@ -16,7 +16,7 @@
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 1920, height = 1080;
+const int width = 2256, height = 1504;
 
 using namespace std;
 using namespace glm;
@@ -26,7 +26,7 @@ int setupWindow(bool vsync, bool fullscreen);
 int main() {
 
     // Create the window
-    setupWindow(true, false);
+    setupWindow(true, true);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
@@ -56,7 +56,7 @@ int main() {
     cout << "Seed: " << seed << "\n";
 
     // Create the world
-    World world(seed, 32);
+    World world(seed, 8);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
