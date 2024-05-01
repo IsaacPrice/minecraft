@@ -1,14 +1,19 @@
-#include "chunk.hpp"
+#include "chunk_coord.hpp"
 
 #include <typeinfo>
+#include <iostream>
+#include <unordered_map>
+#include <utility>
+#include <set>
 
 using namespace std;
 
-vector<Chunk> currentChunks;
 mutex chunkMutex;
 condition_variable chunkCondition;
 
 Chunk blankChunk;
+
+int totalDeleted = 0;
 
 class World {
 public:
@@ -44,35 +49,35 @@ public:
     }
 
     void GenerateChunks() {
-        // Take control of the mutex and generate the chunks
         unique_lock<mutex> lock(chunkMutex);
-        currentChunks = std::vector<Chunk>(renderDistance * renderDistance, Chunk());
-
         int halfRenderDistance = renderDistance / 2;
 
-        // Part one of generation
+        // First pass: Generate chunk data
         for (int i = 0; i < renderDistance; i++) {
             for (int j = 0; j < renderDistance; j++) {
-                currentChunks[i * renderDistance + j].chunkPos = { i - halfRenderDistance, j - halfRenderDistance };
-                currentChunks[i * renderDistance + j].Generate(heightMap, gravel, dirt);
+                Chunk newChunk;
+                ChunkCoord chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
+                newChunk.chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
+                newChunk.Generate(heightMap, gravel, dirt);
+                chunks[chunkPos] = std::move(newChunk);
             }
         }
 
-        // Part two of generation
+        // Second pass: Generate VBOs
         for (int i = 0; i < renderDistance; i++) {
             for (int j = 0; j < renderDistance; j++) {
-                currentChunks[i * renderDistance + j].MakeVertexObject(
-                    (i == 0) ? blankChunk : currentChunks[(i-1) * renderDistance + j],
-                    (i == renderDistance - 1) ? blankChunk : currentChunks[(i+1) * renderDistance + j],
-                    (j == 0) ? blankChunk : currentChunks[i * renderDistance + j-1],
-                    (j == renderDistance - 1) ? blankChunk : currentChunks[i * renderDistance + j+1]
+                ChunkCoord chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
+                // Correct the neighbor references by correctly adjusting indices
+                chunks[chunkPos].MakeVertexObject(
+                    (i == 0) ? blankChunk : chunks[{chunkPos.x - 1, chunkPos.z}],
+                    (i == renderDistance - 1) ? blankChunk : chunks[{chunkPos.x + 1, chunkPos.z}],
+                    (j == 0) ? blankChunk : chunks[{chunkPos.x, chunkPos.z - 1}],
+                    (j == renderDistance - 1) ? blankChunk : chunks[{chunkPos.x, chunkPos.z + 1}]
                 );
-                currentChunks[i * renderDistance + j].CreateObject();
-                currentChunks[i * renderDistance + j].Cleanup();
+                chunks[chunkPos].CreateObject();
+                chunks[chunkPos].Cleanup();
             }
         }
-
-        //tempChunks = currentChunks;
 
         cout << "Finished Generating Terrain" << endl;
         lock.unlock();
@@ -80,41 +85,68 @@ public:
     }
 
     void UpdateChunks(vec3 playerPos) {
-
         unique_lock<mutex> lock(chunkMutex);
 
-        // Get the player's chunk position
-        int playerChunkX = (int)playerPos.x;
-        int playerChunkZ = (int)playerPos.z;
+        // Calculate player's chunk position
+        int playerChunkX = static_cast<int>(playerPos.x);
+        int playerChunkZ = static_cast<int>(playerPos.z);
+        int halfRenderDistance = renderDistance / 2;
 
-        // Go through the chunks and remove the ones that are too far away and add the ones that are inside
-        for (int i = 0; i < renderDistance; i++) {
-            for (int j = 0; j < renderDistance; j++) {
-                int chunkX = currentChunks[i * renderDistance + j].chunkPos.x;
-                int chunkZ = currentChunks[i * renderDistance + j].chunkPos.y;
+        std::set<ChunkCoord> existingChunks;
+        for (auto& pair : chunks) {
+            existingChunks.insert(pair.first);
+        }
 
-                // Check if the chunk is too far away
-                if (abs(playerChunkX - chunkX) > renderDistance / 2 || abs(playerChunkZ - chunkZ) > renderDistance / 2) {
-                    
+        std::vector<ChunkCoord> chunksToRemove;
+        std::vector<ChunkCoord> chunksToCreate;
 
+        // Determine new chunks and chunks to remove
+        for (int i = -halfRenderDistance; i <= halfRenderDistance; i++) {
+            for (int j = -halfRenderDistance; j <= halfRenderDistance; j++) {
+                ChunkCoord searchCoord = {i + playerChunkX, j + playerChunkZ};
+
+                if (existingChunks.find(searchCoord) == existingChunks.end()) {
+                    // If not found, it needs to be created
+                    chunksToCreate.push_back(searchCoord);
                 }
-                
+                existingChunks.erase(searchCoord); // Mark this chunk as active
             }
         }
 
+        // Any remaining coordinates in existingChunks are now too far and should be removed
+        chunksToRemove.assign(existingChunks.begin(), existingChunks.end());
 
+        // Remove old chunks
+        for (auto& coord : chunksToRemove) {
+            chunks.erase(coord);
+        }
 
-        // resize the vector to the render distance ^2 currentChunks
-        // currentChunks.resize(renderDistance * renderDistance);
+        // Create new chunks
+        for (auto& coord : chunksToCreate) {
+            printf("Creating chunk at %d, %d\n", coord.x, coord.z);
+            Chunk newChunk;
+            newChunk.chunkPos = {coord.x, coord.z};
+            newChunk.Generate(heightMap, gravel, dirt);
+            chunks[coord] = std::move(newChunk);
+        }
 
+        // Update the VBOs
+        for (auto& coord : chunksToCreate) {
+            // Ensure neighbors exist before this call or handle cases where they don't
+            chunks[coord].MakeVertexObject(
+                blankChunk,
+                blankChunk,
+                blankChunk,
+                blankChunk
+            );
+            chunks[coord].CreateObject();
+            chunks[coord].Cleanup();
+        }
 
-        // Take control of the mutex and update the chunks
-        // Set the current chunks to the temp chunks
-        
         lock.unlock();
         chunkCondition.notify_one();
-
     }
+    
 
     void changeRenderDistance(unsigned short newRenderDistance) {
         renderDistance = newRenderDistance;

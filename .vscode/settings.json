@@ -59,6 +59,13 @@
         "list": "cpp",
         "optional": "cpp",
         "unordered_map": "cpp",
-        "xhash": "cpp"
+        "xhash": "cpp",
+        "condition_variable": "cpp",
+        "mutex": "cpp",
+        "numeric": "cpp",
+        "random": "cpp",
+        "ratio": "cpp",
+        "stop_token": "cpp",
+        "thread": "cpp"
     }
 }
