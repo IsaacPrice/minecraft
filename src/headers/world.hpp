@@ -123,17 +123,21 @@ public:
 
         // Create new chunks
         for (auto& coord : chunksToCreate) {
+            printf("Creating chunk at %d, %d\n", coord.x, coord.z);
             Chunk newChunk;
             newChunk.chunkPos = {coord.x, coord.z};
             newChunk.Generate(heightMap, gravel, dirt);
             chunks[coord] = std::move(newChunk);
+        }
 
+        // Update the VBOs
+        for (auto& coord : chunksToCreate) {
             // Ensure neighbors exist before this call or handle cases where they don't
             chunks[coord].MakeVertexObject(
-                chunks[{coord.x - 1, coord.z}],
-                chunks[{coord.x + 1, coord.z}],
-                chunks[{coord.x, coord.z - 1}],
-                chunks[{coord.x, coord.z + 1}]
+                blankChunk,
+                blankChunk,
+                blankChunk,
+                blankChunk
             );
             chunks[coord].CreateObject();
             chunks[coord].Cleanup();

@@ -56,7 +56,7 @@ int main() {
     cout << "Seed: " << seed << "\n";
 
     // Create the world
-    World world(seed, 16);
+    World world(seed, 32);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
