@@ -62,13 +62,14 @@ public:
                 ChunkCoord chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
                 Chunk& newChunk = chunks[chunkPos];
                 newChunk.chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
+                //newChunk.Generate(heightMap, gravel, dirt);
                 threads[k] = thread([&]{newChunk.Generate(heightMap, gravel, dirt);});
                 chunks[chunkPos] = std::move(newChunk);
                 k++;
             }
         }
 
-        for(int i = 0; i < rendistsquare; i++) {
+        for(int i = 0; i < threads.size(); i++) {
             threads[i].join();
             cout << "Chunk done\n";
         }
@@ -133,13 +134,23 @@ public:
             chunks.erase(coord);
         }
 
+        vector<thread> threads(chunksToCreate.size());
+
         // Create new chunks
+        int i = 0;
         for (auto& coord : chunksToCreate) {
-            printf("Creating chunk at %d, %d\n", coord.x, coord.z);
-            Chunk newChunk;
+            Chunk& newChunk = chunks[coord];
             newChunk.chunkPos = {coord.x, coord.z};
-            newChunk.Generate(heightMap, gravel, dirt);
+            //newChunk.Generate(heightMap, gravel, dirt);
+            threads[i] = thread([&]{newChunk.Generate(heightMap, gravel, dirt);});
+            printf("Creating chunk at %d, %d\n", coord.x, coord.z);
             chunks[coord] = std::move(newChunk);
+            i++;
+        }
+
+        for(int i = 0; i < threads.size(); i++) {
+            threads[i].join();
+            cout << "Chunk done\n";
         }
 
         // Update the VBOs
