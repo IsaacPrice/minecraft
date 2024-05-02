@@ -4,6 +4,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <utility>
+#include <thread>
 #include <set>
 
 using namespace std;
@@ -51,17 +52,29 @@ public:
     void GenerateChunks() {
         unique_lock<mutex> lock(chunkMutex);
         int halfRenderDistance = renderDistance / 2;
+        int rendistsquare = renderDistance * renderDistance;
+
+        vector<thread> threads(rendistsquare);
 
         // First pass: Generate chunk data
-        for (int i = 0; i < renderDistance; i++) {
+        for (int i = 0, k = 0; i < renderDistance; i++) {
             for (int j = 0; j < renderDistance; j++) {
-                Chunk newChunk;
                 ChunkCoord chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
+                Chunk& newChunk = chunks[chunkPos];
                 newChunk.chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
-                newChunk.Generate(heightMap, gravel, dirt);
+                //threads[i+k] = newChunk.GenerateThread(heightMap, gravel, dirt);
+                threads[k] = thread([&]{newChunk.Generate(heightMap, gravel, dirt);});
                 chunks[chunkPos] = std::move(newChunk);
+                k++;
             }
         }
+
+        for(int i = 0; i < rendistsquare; i++) {
+            threads[i].join();
+            cout << "Chunk done\n";
+        }
+        
+        cout << "Finished Generating Terrain" << endl;
 
         // Second pass: Generate VBOs
         for (int i = 0; i < renderDistance; i++) {
@@ -79,7 +92,7 @@ public:
             }
         }
 
-        cout << "Finished Generating Terrain" << endl;
+        cout << "Finished Meshing Terrain" << endl;
         lock.unlock();
         chunkCondition.notify_one();
     }
@@ -107,9 +120,9 @@ public:
 
                 if (existingChunks.find(searchCoord) == existingChunks.end()) {
                     // If not found, it needs to be created
-                    chunksToCreate.push_back(searchCoord);
+                    //chunksToCreate.push_back(searchCoord);
                 }
-                existingChunks.erase(searchCoord); // Mark this chunk as active
+                //existingChunks.erase(searchCoord); // Mark this chunk as active
             }
         }
 
@@ -118,7 +131,7 @@ public:
 
         // Remove old chunks
         for (auto& coord : chunksToRemove) {
-            chunks.erase(coord);
+            //chunks.erase(coord);
         }
 
         // Create new chunks

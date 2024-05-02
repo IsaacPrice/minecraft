@@ -1,3 +1,6 @@
+#ifndef CHUNK_H
+#define CHUNK_H
+
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -253,3 +256,5 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
         }
     }
 }
+
+#endif
