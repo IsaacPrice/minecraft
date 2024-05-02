@@ -62,7 +62,6 @@ public:
                 ChunkCoord chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
                 Chunk& newChunk = chunks[chunkPos];
                 newChunk.chunkPos = {i - halfRenderDistance, j - halfRenderDistance};
-                //threads[i+k] = newChunk.GenerateThread(heightMap, gravel, dirt);
                 threads[k] = thread([&]{newChunk.Generate(heightMap, gravel, dirt);});
                 chunks[chunkPos] = std::move(newChunk);
                 k++;
@@ -120,9 +119,9 @@ public:
 
                 if (existingChunks.find(searchCoord) == existingChunks.end()) {
                     // If not found, it needs to be created
-                    //chunksToCreate.push_back(searchCoord);
+                    chunksToCreate.push_back(searchCoord);
                 }
-                //existingChunks.erase(searchCoord); // Mark this chunk as active
+                existingChunks.erase(searchCoord); // Mark this chunk as active
             }
         }
 
@@ -131,7 +130,7 @@ public:
 
         // Remove old chunks
         for (auto& coord : chunksToRemove) {
-            //chunks.erase(coord);
+            chunks.erase(coord);
         }
 
         // Create new chunks
