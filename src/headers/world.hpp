@@ -144,7 +144,7 @@ public:
         }
 
         lock.unlock();
-        chunkCondition.notify_one();
+        //chunkCondition.notify_one();
     }
     
 

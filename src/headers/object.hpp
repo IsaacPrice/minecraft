@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <vector>
 #include <algorithm> // for std::max
+#include <iostream>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -12,6 +13,9 @@ extern GLuint programID;
 
 using namespace std;
 using namespace glm;
+
+GLuint Texture;
+GLuint TextureID;
 
 // Function Prototypes
 GLuint loadPNG(const char *imagepath, bool useAlphaChannel = false);
@@ -38,15 +42,17 @@ public:
         glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
         glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(vec2), &uvs[0], GL_STATIC_DRAW);
 
-        Texture = loadPNG("content/terrain.png");
-        TextureID = glGetUniformLocation(programID, "myTextureSampler");
+        if (!Texture){ 
+            Texture = loadPNG("content/terrain.png");
+            TextureID = glGetUniformLocation(programID, "myTextureSampler");
+            cout << "Texture: " << Texture << endl << "TextureID: " << TextureID << endl;
+        }
     };  
 
     ~Object() {
         glDeleteBuffers(1, &vertexBuffer);
         glDeleteBuffers(1, &uvBuffer);
         glDeleteVertexArrays(1, &VertexArrayID);
-        glDeleteTextures(1, &Texture);
     };
 
     void Create(vector<vec3> &vertex, vector<vec2> &uvs) {
@@ -94,8 +100,6 @@ public:
     }
 
 private:
-    GLuint Texture;
-    GLuint TextureID;
     GLuint VertexArrayID;
     GLuint vertexBuffer;
     GLuint uvBuffer;
