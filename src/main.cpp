@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include <vector>
+#include <thread>
 #include <iostream>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -16,7 +17,7 @@
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 2256, height = 1504;
+const int width = 1280, height = 720;
 
 using namespace std;
 using namespace glm;
@@ -26,7 +27,7 @@ int setupWindow(bool vsync, bool fullscreen);
 int main() {
 
     // Create the window
-    setupWindow(true, true);
+    setupWindow(true, false);
 
     // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
@@ -56,7 +57,7 @@ int main() {
     cout << "Seed: " << seed << "\n";
 
     // Create the world
-    World world(seed, 8);
+    World world(seed, 32);
 
     // Run the program
     while (!glfwWindowShouldClose(window)) {
@@ -80,11 +81,12 @@ int main() {
 
         // Render the world
         unique_lock<mutex> lock(chunkMutex);
-        chunkCondition.wait(lock, [] { return !chunks.empty(); });
+        //chunkCondition.wait(lock, [] { return !chunks.empty(); });
+        // Copy the chunks
         for (auto& chunk : chunks) {
             chunk.second.Draw();
         }
-        lock.unlock();
+        //lock.unlock();
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
