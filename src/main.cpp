@@ -11,7 +11,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "headers/world.hpp"
+#include "headers/World.h"
 #include "headers/shader.hpp"
 #include "headers/controls.hpp"
 
@@ -24,43 +24,31 @@ using namespace glm;
 
 int setupWindow(bool vsync, bool fullscreen);
 
-int main() {
-
-    // Create the window
+int main() 
+{
     setupWindow(true, false);
 
-    // Create the shader
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
 
-    // Setup the input modes
-	//glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwPollEvents();
 	glfwSetCursorPos(window, width/2, height/2);
 
-    // Set the opengl settings
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glFrontFace(GL_CW);
     //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
-    // Set light data
     vec3 lightDirection = vec3(0.f, 0.f, 1.f);
-
-    // Get the uniform locations
     GLint lightDirUniformLocation = glGetUniformLocation(programID, "lightDirection");
 
-    // Generate the seed
     uint64_t seed = time(NULL);
-
     cout << "Seed: " << seed << "\n";
+    World world(seed, 8);
 
-    // Create the world
-    World world(seed, 32);
-
-    // Run the program
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(window)) 
+    {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(programID);
 
@@ -70,34 +58,26 @@ int main() {
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
-        // print out the directions
-        // printPositions("clear");
-
         glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
         glUniform3fv(lightDirUniformLocation, 1, value_ptr(lightDirection));
 
-        // Update the world
         world.UpdateChunks(position);
 
-        // Render the world
-        unique_lock<mutex> lock(chunkMutex);
-        //chunkCondition.wait(lock, [] { return !chunks.empty(); });
-        // Copy the chunks
-        for (auto& chunk : chunks) {
-            chunk.second.Draw();
-        }
-        //lock.unlock();
 
-		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        for (auto& chunk : renderChunks) 
+        {
+            chunk.second->Draw();
+        }
+
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) 
+        {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		}
 
-        // Update the window
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // Close the program
     glDeleteProgram(programID);
     glfwDestroyWindow(window);
     glfwTerminate();

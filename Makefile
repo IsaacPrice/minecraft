@@ -1,12 +1,12 @@
 CC=g++
 CFLAGS=-Iinclude
 LDFLAGS=-Llib -lglfw3 -lgdi32 -lopengl32
-FILES=src/main.cpp src/glad.c src/Fbo.cpp
+FILES=src/main.cpp src/glad.c src/Fbo.cpp src/World.cpp src/Chunk.cpp
 
 .PHONY: app clean
 
-app: src/main.cpp src/glad.c
+app: $(FILES)
 	$(CC) $(CFLAGS) -o app $(FILES) $(LDFLAGS)
 
 clean:
-	rm -f app
+	rm -f app *.o

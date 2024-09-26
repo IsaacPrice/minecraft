@@ -1,0 +1,2 @@
+C:/Users/Isaac/Programs/minecraft/build/CMakeFiles/edit_cache.dir
+C:/Users/Isaac/Programs/minecraft/build/CMakeFiles/rebuild_cache.dir

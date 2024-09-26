@@ -3,7 +3,7 @@
 #include <mutex>
 #include <condition_variable>
 
-#include "chunk.hpp"
+#include "Chunk.h"
 
 struct ChunkCoord {
     int x, z;
@@ -30,4 +30,4 @@ namespace std {
     };
 }
 
-std::unordered_map<ChunkCoord, Chunk> chunks;
+std::unordered_map<ChunkCoord, Chunk*> renderChunks;
