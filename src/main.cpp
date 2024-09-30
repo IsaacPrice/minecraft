@@ -1,28 +1,30 @@
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <cstring>
 #include <vector>
 #include <thread>
 #include <iostream>
-
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "headers/World.hpp"
+#include "headers/Shader.hpp"
+#include "headers/Controls.hpp"
 
-#include "headers/World.h"
-#include "headers/shader.hpp"
-#include "headers/controls.hpp"
+
+using namespace std;
+using namespace glm;
 
 GLFWwindow* window;
 GLuint programID;
 const int width = 1280, height = 720;
 
-using namespace std;
-using namespace glm;
 
 int setupWindow(bool vsync, bool fullscreen);
+
 
 int main() 
 {
@@ -63,10 +65,10 @@ int main()
 
         world.UpdateChunks(position);
 
-
-        for (auto& chunk : renderChunks) 
+        unique_lock<mutex> lock(chunkMutex);
+        for (auto& chunk : chunks) 
         {
-            chunk.second->Draw();
+            chunk.second.Draw();
         }
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) 
@@ -85,35 +87,28 @@ int main()
 }
 
 
-int setupWindow(bool vsync, bool fullscreen) {
+int setupWindow(bool vsync, bool fullscreen) 
+{
     glfwInit();
     glfwWindowHint(GLFW_SAMPLES, 0);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
+    window = glfwCreateWindow(width, height, "Minecraft", fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
 
-    if (fullscreen) {
-        window = glfwCreateWindow(width, height, "Minecraft", glfwGetPrimaryMonitor(), NULL);
-    }
-    else {
-        window = glfwCreateWindow(width, height, "Minecraft", NULL, NULL);
-    }
-    if (window == NULL) {
+    if (window == NULL) 
+    {
         glfwTerminate();
         return -1;
     }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(vsync);
 
-    if (vsync) {
-	    glfwSwapInterval(1);
-    } else {
-        glfwSwapInterval(0);
-    }
-
-    // Check for errors
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) 
+    {
         return -1;
     }
 

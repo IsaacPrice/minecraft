@@ -1,14 +1,59 @@
-#include "headers/Chunk.h"
+#ifndef CHUNK_H
+#define CHUNK_H
 
+#include <iostream>
+#include <string>
+#include <cstdlib>
+#include <vector>
+#include <cstdlib>
+
+#include "Object.hpp"
+#include "FastNoise.hpp"
+#include "ChunkHelper.hpp"
+
+extern GLuint programID;
+
+using namespace std;
+using namespace glm;
+
+class Chunk {
+public:
+    Chunk() {};
+    Chunk(int start_x, int start_y);
+
+    void Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt);
+    void CreateObject();
+    void Cleanup();
+
+    bool isChunkSaved();
+
+    void MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ);
+
+    void Draw();
+
+    bool operator==(const Chunk &other) 
+    {
+        return chunkPos == other.chunkPos;
+    }
+
+    vec2 chunkPos;
+
+    unsigned short blockMap[16][255][16] = { AIR };
+
+private:
+    Object chunk;
+
+    vector<vec3> vertices;
+    vector<vec2> uvCoords;
+};
 
 Chunk::Chunk(int start_x, int start_y) 
 {
     chunkPos = { start_x, start_y };
 }
 
-
 void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) 
-{
+{    
     unsigned short heightMap[16][16] = {0};
     for (int i = 0; i < 16; i++) 
     {
@@ -16,12 +61,11 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt)
         {
             double worldX = (chunkPos.x * 16 + i) * 3.125f;
             double worldZ = (chunkPos.y * 16 + j) * 3.125f;
-
             int height = (int)(heightGen.GetNoise(worldX, worldZ) * 30 + 45);
             heightMap[i][j] = height;
         }
     }
-    
+
     for (int x = 0; x < 16; x++) 
     {
         for (int z = 0; z < 16; z++) 
@@ -46,10 +90,8 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt)
         {
             for (int y = 0; y < 255; y++) 
             {
-                if (blockMap[x][y][z] == AIR) 
-                {
+                if (blockMap[x][y][z] == AIR)
                     continue;
-                }
 
                 double worldX = (chunkPos.x * 16 + x) * 3;
                 double worldZ = (chunkPos.y * 16 + z) * 3;
@@ -73,13 +115,10 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt)
         {
             for (int y = 0; y < 255; y++) 
             {
-                if (blockMap[x][y][z] == AIR) 
-                {
+                if (blockMap[x][y][z] == AIR)
                     continue;
-                }
 
                 int dirtLayer = 3 + rand() % 2;
-
                 if (y == 0) 
                 {
                     blockMap[x][y][z] = BEDROCK;
@@ -98,35 +137,29 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt)
 }
 
 
-void Chunk::CreateObject() 
-{
-    _chunk.Create(_vertices, _uvCoords);
+void Chunk::CreateObject() {
+    chunk.Create(vertices, uvCoords);
 }
 
 
-void Chunk::CleanupPrimatives() 
-{
-    _vertices.clear();
-    _uvCoords.clear();
+void Chunk::Cleanup() {
+    vertices.clear();
+    uvCoords.clear();
 }
 
 
-bool Chunk::isChunkSaved() 
-{
+bool Chunk::isChunkSaved() {
     return false;
 }
 
 
-void Chunk::Draw() 
-{
-    _chunk.Draw();
+void Chunk::Draw() {
+    chunk.Draw();
 }
 
 
 void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ) 
 {
-    const float BLOCK_WIDTH = 1.0f / 16.0f;
-
     for (unsigned x = 0; x < 16; x++) 
     {
         for (unsigned y = 0; y < 255; y++) 
@@ -135,11 +168,10 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
             {
                 int blockID = blockMap[x][y][z];
                 if (blockID == 0)
-                {
                     continue;
-                }
 
-                vec3 blockPos(x * BLOCK_WIDTH, y * BLOCK_WIDTH, z * BLOCK_WIDTH);
+                vec3 blockPos(x / 16.0f, y / 16.0f, z / 16.0f);
+
                 bool sides[] = {false, false, false, false, false, false};
 
                 // TOP
@@ -217,32 +249,32 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
                 for (unsigned i = 0; i < 6; i++) 
                 {
                     if (!sides[i])
-                    {
                         continue;
-                    }
 
                     vector<vec3> tempVertices = getSideVertex(blockPos.x + chunkPos.x, blockPos.y, blockPos.z + chunkPos.y, (SIDE)i);
                     vector<vec2> tempUV = getTextureCoords((BLOCK)blockID, (SIDE)i);
 
-                    if (_vertices.size() == 0) 
+                    if (vertices.size() == 0) 
                     {
-                        _vertices = tempVertices;
+                        vertices = tempVertices;
                     }
                     else 
                     {
-                        _vertices.insert(_vertices.end(), tempVertices.begin(), tempVertices.end());
+                        vertices.insert(vertices.end(), tempVertices.begin(), tempVertices.end());
                     }
 
-                    if (_uvCoords.size() == 0) 
+                    if (uvCoords.size() == 0) 
                     {
-                        _uvCoords = tempUV;
+                        uvCoords = tempUV;
                     }
                     else 
                     {
-                        _uvCoords.insert(_uvCoords.end(), tempUV.begin(), tempUV.end());
+                        uvCoords.insert(uvCoords.end(), tempUV.begin(), tempUV.end());
                     }
                 }
             }
         }
     }
 }
+
+#endif
