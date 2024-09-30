@@ -47,7 +47,7 @@ int main()
 
     uint64_t seed = time(NULL);
     cout << "Seed: " << seed << "\n";
-    World world(seed, 6);
+    World world(seed, 8);
 
     while (!glfwWindowShouldClose(window)) 
     {
