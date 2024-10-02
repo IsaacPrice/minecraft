@@ -14,7 +14,6 @@
 #include "headers/Shader.hpp"
 #include "headers/Controls.hpp"
 
-
 using namespace std;
 using namespace glm;
 
