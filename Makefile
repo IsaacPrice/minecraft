@@ -1,7 +1,7 @@
 CC=g++
 CFLAGS=-Iinclude
 LDFLAGS=-Llib -lglfw3 -lgdi32 -lopengl32
-FILES=src/main.cpp src/glad.c src/Fbo.cpp src/World.cpp src/Chunk.cpp
+FILES=src/main.cpp src/glad.c src/Fbo.cpp src/Chunk.cpp src/FastNoise.cpp src/Object.cpp src/World.cpp
 
 .PHONY: app clean
 
