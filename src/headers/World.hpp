@@ -51,11 +51,8 @@ private:
         for(int i = 0; i < threads.size(); i++) 
         {
             threads[i].join();
-            cout << "Chunk done\n";
         }
         
-        cout << "Finished Generating Terrain" << endl;
-
         for (int i = 0; i < _renderDistance; i++) 
         {
             for (int j = 0; j < _renderDistance; j++) 
@@ -72,7 +69,6 @@ private:
             }
         }
 
-        cout << "Finished Meshing Terrain" << endl;
         lock.unlock();
         chunkCondition.notify_one();
     }
@@ -155,7 +151,6 @@ public:
             Chunk& newChunk = chunks[coord];
             newChunk.chunkPos = {coord.x, coord.z};
             threads[i] = thread([&]{newChunk.Generate(_heightMapNoise, _gravelNoise, _dirtNoise);});
-            printf("Creating chunk at %d, %d\n", coord.x, coord.z);
             chunks[coord] = std::move(newChunk);
             i++;
         }
@@ -163,7 +158,6 @@ public:
         for(int i = 0; i < threads.size(); i++) 
         {
             threads[i].join();
-            cout << "Chunk done\n";
         }
 
         for (auto& coord : chunksToCreate) 

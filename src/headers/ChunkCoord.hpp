@@ -3,7 +3,7 @@
 #include <mutex>
 #include <condition_variable>
 
-#include "chunk.hpp"
+#include "Chunk.hpp"
 
 struct ChunkCoord 
 {
