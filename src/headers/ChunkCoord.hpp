@@ -1,9 +1,11 @@
+#pragma once
+
 #include <unordered_map>
 #include <utility>
 #include <mutex>
 #include <condition_variable>
 
-#include "chunk.hpp"
+#include "Chunk.hpp"
 
 struct ChunkCoord 
 {
@@ -37,4 +39,4 @@ namespace std
     };
 }
 
-std::unordered_map<ChunkCoord, Chunk> chunks;
+extern std::unordered_map<ChunkCoord, Chunk> chunks;

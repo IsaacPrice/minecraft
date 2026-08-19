@@ -14,13 +14,13 @@
 #include "headers/Shader.hpp"
 #include "headers/Controls.hpp"
 
-
 using namespace std;
 using namespace glm;
 
 GLFWwindow* window;
 GLuint programID;
-const int width = 1280, height = 720;
+// extern: const has internal linkage by default, and Controls.cpp needs these.
+extern const int width = 1280, height = 720;
 
 
 int setupWindow(bool vsync, bool fullscreen);

@@ -1,3 +1,5 @@
+#pragma once
+
 enum SIDE {
     TOP,
     BOTTOM, 
