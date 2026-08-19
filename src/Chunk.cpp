@@ -1,56 +1,139 @@
-#ifndef CHUNK_H
-#define CHUNK_H
-
-#include <iostream>
-#include <string>
-#include <cstdlib>
-#include <vector>
-#include <cstdlib>
-
-#include "Object.hpp"
-#include "FastNoise.hpp"
-#include "ChunkHelper.hpp"
-
-extern GLuint programID;
+#include "headers/Chunk.hpp"
 
 using namespace std;
 using namespace glm;
 
-class Chunk {
-public:
-    Chunk() {};
-    Chunk(int start_x, int start_y);
+float blockWidth = 0.0625f;
 
-    void Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt);
-    void CreateObject();
-    void Cleanup();
 
-    bool isChunkSaved();
-
-    void MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ);
-
-    void Draw();
-
-    bool operator==(const Chunk &other) 
+vector<vec3> getSideVertex(float x, float y, float z, SIDE part) 
+{
+    if (part == TOP) 
     {
-        return chunkPos == other.chunkPos;
+        return 
+        {
+            {x, y + blockWidth, z},
+            {x, y + blockWidth, z + blockWidth},
+            {x + blockWidth, y + blockWidth, z + blockWidth},
+            {x + blockWidth, y + blockWidth, z + blockWidth},
+            {x + blockWidth, y + blockWidth, z},
+            {x, y + blockWidth, z}
+        };;
+    }
+    else if (part == BOTTOM) 
+    {
+        return 
+        {
+            {x, y, z},
+            {x + blockWidth, y, z},
+            {x + blockWidth, y, z + blockWidth},
+            {x + blockWidth, y, z + blockWidth},
+            {x, y, z + blockWidth},
+            {x, y, z}
+        };
+    }
+    else if (part == NORTH) 
+    {
+        return 
+        {
+            {x, y, z},
+            {x, y + blockWidth, z},
+            {x, y + blockWidth, z + blockWidth},
+            {x, y + blockWidth, z + blockWidth},
+            {x, y, z + blockWidth},
+            {x, y, z}
+        };
+    }
+    else if (part == EAST) 
+    {
+        return 
+        {
+            {x, y, z + blockWidth},
+            {x + blockWidth, y, z + blockWidth},
+            {x + blockWidth, y + blockWidth, z + blockWidth},
+            {x + blockWidth, y + blockWidth, z + blockWidth},
+            {x, y + blockWidth, z + blockWidth},
+            {x, y, z + blockWidth}
+        };
+    }
+    else if (part == SOUTH) 
+    {
+        return 
+        {
+            {x + blockWidth, y, z},
+            {x + blockWidth, y + blockWidth, z},
+            {x + blockWidth, y + blockWidth, z + blockWidth},
+            {x + blockWidth, y + blockWidth, z + blockWidth},
+            {x + blockWidth, y, z + blockWidth},
+            {x + blockWidth, y, z}
+        };
+    }
+    else 
+    {
+        return 
+        {
+            {x, y, z},
+            {x + blockWidth, y, z},
+            {x + blockWidth, y + blockWidth, z},
+            {x + blockWidth, y + blockWidth, z},
+            {x, y + blockWidth, z},
+            {x, y, z}
+        };
+    }
+}
+
+
+vector<vec2> getTextureCoords(BLOCK blockID, SIDE side) 
+{
+    bool altCoords = false;
+
+    if (blockID == GRASS && side == BOTTOM)
+    {
+        blockID = DIRT;
+    }
+    else if (blockID == GRASS && side != TOP) 
+    {
+        blockID = GRASS_SIDE;
+        if (side == NORTH || side == SOUTH) {
+            altCoords = true;
+        }
     }
 
-    vec2 chunkPos;
+    float startX = ((blockID - 1) % 16) * 0.0625;
+    float startY = (int((blockID - 1) / 16)) * 0.0625;
 
-    unsigned short blockMap[16][255][16] = { AIR };
+    if (altCoords) 
+    {
+        return 
+        {
+            {startX, startY + 0.0625},
+            {startX, startY},
+            {startX + 0.0625, startY},
+            {startX + 0.0625, startY},
+            {startX + 0.0625, startY + 0.0625},
+            {startX, startY + 0.0625},
+        };
+    }
 
-private:
-    Object chunk;
+    return 
+    {
+        {startX + 0.0625, startY + 0.0625},
+        {startX, startY + 0.0625},
+        {startX, startY},
+        {startX, startY},
+        {startX + 0.0625, startY},
+        {startX + 0.0625, startY + 0.0625},
+    };
+}
 
-    vector<vec3> vertices;
-    vector<vec2> uvCoords;
-};
 
-Chunk::Chunk(int start_x, int start_y) 
-{
+Chunk::Chunk() {}
+
+
+Chunk::Chunk(int start_x, int start_y) {
     chunkPos = { start_x, start_y };
 }
+
 
 void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) 
 {    
@@ -137,28 +220,32 @@ void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt)
 }
 
 
-void Chunk::CreateObject() {
+void Chunk::CreateObject() 
+{
     chunk.Create(vertices, uvCoords);
 }
 
 
-void Chunk::Cleanup() {
+void Chunk::Cleanup() 
+{
     vertices.clear();
     uvCoords.clear();
 }
 
 
-bool Chunk::isChunkSaved() {
+bool Chunk::isChunkSaved() 
+{
     return false;
 }
 
 
-void Chunk::Draw() {
+void Chunk::Draw() 
+{
     chunk.Draw();
 }
 
 
-void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ) 
+void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ)
 {
     for (unsigned x = 0; x < 16; x++) 
     {
@@ -277,4 +364,7 @@ void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negative
     }
 }
 
-#endif
+
+bool Chunk::operator==(const Chunk &other) {
+    return chunkPos == other.chunkPos;
+}

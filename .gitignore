@@ -1,3 +1,11 @@
-/content/scripts/
+# Build output
 /build/
+app
+app.exe
+*.o
+
+# Editor / tooling
 /.vscode/
+
+# Generated content
+/content/scripts/
