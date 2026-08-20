@@ -44,10 +44,13 @@ int main()
 
     vec3 lightDirection = vec3(0.f, 0.f, 1.f);
     GLint lightDirUniformLocation = glGetUniformLocation(programID, "lightDirection");
+    GLint alphaScaleUniformLocation = glGetUniformLocation(programID, "alphaScale");
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     uint64_t seed = time(NULL);
     cout << "Seed: " << seed << "\n";
-    World world(seed, 8);
+    World world(seed, 64);
 
     while (!glfwWindowShouldClose(window)) 
     {
@@ -66,10 +69,29 @@ int main()
         world.UpdateChunks(position);
 
         unique_lock<mutex> lock(chunkMutex);
-        for (auto& chunk : chunks) 
+
+        // Solid terrain and the cut-out plants first, with depth writes on.
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+        glUniform1f(alphaScaleUniformLocation, 1.0f);
+        for (auto& chunk : chunks)
         {
             chunk.second.Draw();
         }
+
+        // Then water, blended over the top. Depth writes are off for this pass
+        // because the chunks are not sorted back to front, and without that two
+        // overlapping water surfaces would hide each other depending on which
+        // chunk happened to be drawn first.
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+        glUniform1f(alphaScaleUniformLocation, 0.65f);
+        for (auto& chunk : chunks)
+        {
+            chunk.second.DrawWater();
+        }
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) 
         {
