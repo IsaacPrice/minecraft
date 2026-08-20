@@ -165,9 +165,13 @@ GLuint loadPNG(const char* imagepath, bool useAlphaChannel)
     glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+
+    // No mipmaps. Every block samples one 16x16 tile of a shared atlas, and the
+    // lower mip levels average across tile boundaries: solid blocks pick up a
+    // seam of whatever is next to them in the atlas, and the cut-out plant tiles
+    // are worse, because averaging their transparent pixels in drags the alpha
+    // under the cut-out threshold and eats the edges of the plant with distance.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     stbi_image_free(data);
 

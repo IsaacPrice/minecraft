@@ -8,8 +8,6 @@
 // These must live in exactly one translation unit.
 std::unordered_map<ChunkCoord, Chunk> chunks;
 std::mutex chunkMutex;
-std::condition_variable chunkCondition;
-Chunk blankChunk;
 
 
 namespace
@@ -78,59 +76,103 @@ std::set<ChunkCoord> World::ChunksInRangeOf(int centreX, int centreZ) const
 }
 
 
+// Hands back the block map for a chunk, generating it the first time it is
+// asked for. Several workers ask for the same coordinate constantly, because
+// every chunk needs the four around it in order to mesh, so the flag makes sure
+// exactly one of them does the work and the rest wait for it rather than
+// generating their own copy.
+BlockMapPtr World::EnsureBlockMap(const ChunkCoord& coord, const TerrainGen& terrain)
+{
+    std::shared_ptr<BlockMapSlot> slot;
+    {
+        std::lock_guard<std::mutex> lock(_blockMapMutex);
+
+        std::shared_ptr<BlockMapSlot>& entry = _blockMaps[coord];
+        if (!entry)
+            entry = std::make_shared<BlockMapSlot>();
+
+        slot = entry;
+    }
+
+    // Deliberately outside the lock. Generation is slow, and holding the map
+    // mutex across it would serialise every worker behind whichever one happens
+    // to be generating.
+    std::call_once(slot->generated, [&]
+    {
+        BlockMapPtr map = std::make_shared<BlockMap>();
+        terrain.GenerateChunk(*map, coord.x, coord.z);
+        slot->map = map;
+    });
+
+    return slot->map;
+}
+
+
+// Drops cached block maps that no chunk still needs. Workers hold shared_ptrs
+// to the maps they are meshing against, so erasing an entry here only releases
+// this cache's reference and never pulls a map out from under a worker.
+//
+// The kept region is the square of loaded chunks grown by one ring, because
+// meshing a chunk at the edge of the render distance reads the chunk just
+// outside it. It is passed as bounds rather than as a set of coordinates since
+// this runs every frame and building that set would cost more than the walk.
+void World::EvictBlockMaps(int centreX, int centreZ, int radius)
+{
+    std::lock_guard<std::mutex> lock(_blockMapMutex);
+
+    for (auto it = _blockMaps.begin(); it != _blockMaps.end(); )
+    {
+        const ChunkCoord& coord = it->first;
+
+        bool keep = coord.x >= centreX - radius && coord.x <= centreX + radius &&
+                    coord.z >= centreZ - radius && coord.z <= centreZ + radius;
+
+        if (keep)
+            ++it;
+        else
+            it = _blockMaps.erase(it);
+    }
+}
+
+
+Chunk World::BuildChunk(const ChunkCoord& coord, const TerrainGen& terrain)
+{
+    BlockMapPtr self = EnsureBlockMap(coord, terrain);
+    BlockMapPtr negativeX = EnsureBlockMap({coord.x - 1, coord.z}, terrain);
+    BlockMapPtr positiveX = EnsureBlockMap({coord.x + 1, coord.z}, terrain);
+    BlockMapPtr negativeZ = EnsureBlockMap({coord.x, coord.z - 1}, terrain);
+    BlockMapPtr positiveZ = EnsureBlockMap({coord.x, coord.z + 1}, terrain);
+
+    Chunk chunk;
+    chunk.chunkPos = {static_cast<float>(coord.x), static_cast<float>(coord.z)};
+    chunk.blocks = self;
+    chunk.MakeVertexObject(*negativeX, *positiveX, *negativeZ, *positiveZ);
+
+    return chunk;
+}
+
+
 // Builds the starting world up front. This one blocks, because there is nothing
 // worth rendering until it finishes.
 void World::GenerateChunks()
 {
-    std::unique_lock<std::mutex> lock(chunkMutex);
-
     std::set<ChunkCoord> wanted = ChunksInRangeOf(0, 0);
     std::vector<ChunkCoord> coords(wanted.begin(), wanted.end());
+    std::vector<Chunk> built(coords.size());
 
-    std::vector<Chunk*> pending;
-    pending.reserve(coords.size());
-
-    for (const ChunkCoord& coord : coords)
-    {
-        Chunk& chunk = chunks[coord];
-        chunk.chunkPos = {static_cast<float>(coord.x), static_cast<float>(coord.z)};
-        pending.push_back(&chunk);
-    }
-
-    parallelFor(pending.size(), [&](size_t index)
-    {
-        pending[index]->Generate(_heightMapNoise, _gravelNoise, _dirtNoise);
-    });
-
-    // Meshing only reads neighbours, so it parallelises too now that every
-    // block map is complete.
     parallelFor(coords.size(), [&](size_t index)
     {
-        const ChunkCoord& coord = coords[index];
-
-        auto neighbour = [&](int dx, int dz) -> Chunk&
-        {
-            auto it = chunks.find({coord.x + dx, coord.z + dz});
-            return (it == chunks.end()) ? blankChunk : it->second;
-        };
-
-        chunks[coord].MakeVertexObject(
-            neighbour(-1, 0),
-            neighbour(1, 0),
-            neighbour(0, -1),
-            neighbour(0, 1)
-        );
+        built[index] = BuildChunk(coords[index], _terrain);
     });
 
     // CreateObject talks to OpenGL, so it stays on this thread.
-    for (const ChunkCoord& coord : coords)
+    std::lock_guard<std::mutex> lock(chunkMutex);
+    for (size_t index = 0; index < coords.size(); index++)
     {
-        chunks[coord].CreateObject();
-        chunks[coord].Cleanup();
+        Chunk& chunk = chunks[coords[index]] = std::move(built[index]);
+        chunk.CreateObject();
+        chunk.Cleanup();
     }
-
-    lock.unlock();
-    chunkCondition.notify_one();
 }
 
 
@@ -171,12 +213,6 @@ void World::StopWorkers()
 
 void World::WorkerLoop()
 {
-    // Each worker samples from its own copies. FastNoise reads are const, but
-    // separate copies keep the workers off the same cache lines.
-    FastNoise heightMapNoise = _heightMapNoise;
-    FastNoise gravelNoise = _gravelNoise;
-    FastNoise dirtNoise = _dirtNoise;
-
     for (;;)
     {
         ChunkCoord coord;
@@ -191,10 +227,7 @@ void World::WorkerLoop()
             _pending.pop_front();
         }
 
-        Chunk chunk;
-        chunk.chunkPos = {static_cast<float>(coord.x), static_cast<float>(coord.z)};
-        chunk.Generate(heightMapNoise, gravelNoise, dirtNoise);
-        chunk.MakeVertexObject(blankChunk, blankChunk, blankChunk, blankChunk);
+        Chunk chunk = BuildChunk(coord, _terrain);
 
         {
             std::lock_guard<std::mutex> lock(_queueMutex);
@@ -209,26 +242,7 @@ World::World(unsigned long seed, unsigned short renderDistance)
     this->_seed = seed;
     this->_renderDistance = renderDistance;
 
-    _heightMapNoise.SetSeed(seed);
-    _heightMapNoise.SetNoiseType(FastNoise::PerlinFractal);
-    _heightMapNoise.SetFrequency(0.00153f);
-    _heightMapNoise.SetFractalOctaves(16);
-
-    _gravelNoise.SetSeed(seed);
-    _gravelNoise.SetNoiseType(FastNoise::Cellular);
-    _gravelNoise.SetFrequency(0.03f);
-    _gravelNoise.SetFractalOctaves(6);
-    _gravelNoise.SetFractalLacunarity(1.86f);
-    _gravelNoise.SetFractalGain(3.0f);
-    _gravelNoise.SetCellularReturnType(FastNoise::Distance2Add);
-
-    _dirtNoise.SetSeed(seed + 1);
-    _dirtNoise.SetNoiseType(FastNoise::Cellular);
-    _dirtNoise.SetFrequency(0.03f);
-    _dirtNoise.SetFractalOctaves(6);
-    _dirtNoise.SetFractalLacunarity(1.86f);
-    _dirtNoise.SetFractalGain(3.0f);
-    _dirtNoise.SetCellularReturnType(FastNoise::Distance2Add);
+    _terrain = TerrainGen(seed);
 
     GenerateChunks();
     StartWorkers();
@@ -259,6 +273,8 @@ void World::UpdateChunks(glm::vec3 playerPos)
                 ++it;
         }
     }
+
+    EvictBlockMaps(playerChunkX, playerChunkZ, _renderDistance / 2 + 1);
 
     // Which of the wanted chunks are not loaded yet. Only this thread touches
     // the chunk map, so no lock is needed to read it here.
@@ -335,6 +351,11 @@ void World::changeRenderDistance(unsigned short newRenderDistance)
         _pending.clear();
         _inFlight.clear();
         _ready.clear();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(_blockMapMutex);
+        _blockMaps.clear();
     }
 
     _renderDistance = newRenderDistance;

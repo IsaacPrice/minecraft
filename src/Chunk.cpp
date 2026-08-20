@@ -6,105 +6,217 @@ using namespace glm;
 float blockWidth = 0.0625f;
 
 
-vector<vec3> getSideVertex(float x, float y, float z, SIDE part) 
+// One face of an arbitrary box. Blocks are cubes, but a cactus is narrower than
+// a block, so the corners are passed in rather than derived from blockWidth.
+static vector<vec3> getBoxFace(float x0, float y0, float z0,
+                               float x1, float y1, float z1, SIDE part)
 {
-    if (part == TOP) 
+    if (part == TOP)
     {
-        return 
+        return
         {
-            {x, y + blockWidth, z},
-            {x, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z},
-            {x, y + blockWidth, z}
-        };;
-    }
-    else if (part == BOTTOM) 
-    {
-        return 
-        {
-            {x, y, z},
-            {x + blockWidth, y, z},
-            {x + blockWidth, y, z + blockWidth},
-            {x + blockWidth, y, z + blockWidth},
-            {x, y, z + blockWidth},
-            {x, y, z}
+            {x0, y1, z0},
+            {x0, y1, z1},
+            {x1, y1, z1},
+            {x1, y1, z1},
+            {x1, y1, z0},
+            {x0, y1, z0}
         };
     }
-    else if (part == NORTH) 
+    else if (part == BOTTOM)
     {
-        return 
+        return
         {
-            {x, y, z},
-            {x, y + blockWidth, z},
-            {x, y + blockWidth, z + blockWidth},
-            {x, y + blockWidth, z + blockWidth},
-            {x, y, z + blockWidth},
-            {x, y, z}
+            {x0, y0, z0},
+            {x1, y0, z0},
+            {x1, y0, z1},
+            {x1, y0, z1},
+            {x0, y0, z1},
+            {x0, y0, z0}
         };
     }
-    else if (part == EAST) 
+    else if (part == NORTH)
     {
-        return 
+        return
         {
-            {x, y, z + blockWidth},
-            {x + blockWidth, y, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x, y + blockWidth, z + blockWidth},
-            {x, y, z + blockWidth}
+            {x0, y0, z0},
+            {x0, y1, z0},
+            {x0, y1, z1},
+            {x0, y1, z1},
+            {x0, y0, z1},
+            {x0, y0, z0}
         };
     }
-    else if (part == SOUTH) 
+    else if (part == EAST)
     {
-        return 
+        return
         {
-            {x + blockWidth, y, z},
-            {x + blockWidth, y + blockWidth, z},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y + blockWidth, z + blockWidth},
-            {x + blockWidth, y, z + blockWidth},
-            {x + blockWidth, y, z}
+            {x0, y0, z1},
+            {x1, y0, z1},
+            {x1, y1, z1},
+            {x1, y1, z1},
+            {x0, y1, z1},
+            {x0, y0, z1}
         };
     }
-    else 
+    else if (part == SOUTH)
     {
-        return 
+        return
         {
-            {x, y, z},
-            {x + blockWidth, y, z},
-            {x + blockWidth, y + blockWidth, z},
-            {x + blockWidth, y + blockWidth, z},
-            {x, y + blockWidth, z},
-            {x, y, z}
+            {x1, y0, z0},
+            {x1, y1, z0},
+            {x1, y1, z1},
+            {x1, y1, z1},
+            {x1, y0, z1},
+            {x1, y0, z0}
+        };
+    }
+    else
+    {
+        return
+        {
+            {x0, y0, z0},
+            {x1, y0, z0},
+            {x1, y1, z0},
+            {x1, y1, z0},
+            {x0, y1, z0},
+            {x0, y0, z0}
         };
     }
 }
 
 
-vector<vec2> getTextureCoords(BLOCK blockID, SIDE side) 
+vector<vec3> getSideVertex(float x, float y, float z, SIDE part)
 {
-    bool altCoords = false;
+    return getBoxFace(x, y, z, x + blockWidth, y + blockWidth, z + blockWidth, part);
+}
+
+
+// A cactus is a block narrower than the one it stands in. The atlas draws that
+// by leaving a transparent border around its tiles, which the cut-out threshold
+// would throw away, slitting the plant open along every corner. Pulling the
+// geometry in by the same one texel instead, and trimming that border off the
+// texture, gives the same silhouette with nothing see-through in it. Full block
+// height, so a stack of them meets cleanly.
+vector<vec3> getCactusVertex(float x, float y, float z, SIDE part)
+{
+    float inset = blockWidth / 16.0f;
+
+    return getBoxFace(x + inset, y, z + inset,
+                      x + blockWidth - inset, y + blockWidth, z + blockWidth - inset, part);
+}
+
+
+// Pulls texture coordinates in by one texel on every side, dropping the
+// transparent border of the cactus tiles now that the geometry carries it.
+vector<vec2> insetTile(const vector<vec2>& uvs)
+{
+    const float texel = 0.0625f / 16.0f;
+
+    float centreU = 0.0f, centreV = 0.0f;
+    for (size_t i = 0; i < uvs.size(); i++)
+    {
+        centreU += uvs[i].x;
+        centreV += uvs[i].y;
+    }
+    centreU /= uvs.size();
+    centreV /= uvs.size();
+
+    vector<vec2> pulled;
+    pulled.reserve(uvs.size());
+    for (size_t i = 0; i < uvs.size(); i++)
+    {
+        pulled.push_back({ uvs[i].x + (uvs[i].x < centreU ? texel : -texel),
+                           uvs[i].y + (uvs[i].y < centreV ? texel : -texel) });
+    }
+
+    return pulled;
+}
+
+
+// Plants mesh as two quads standing on the diagonals of the block instead of as
+// a cube. Both sides of each quad have to be visible, which works because face
+// culling is off. The vertex order matches getSideVertex, so a cross quad can
+// reuse the same texture coordinates a cube face would use.
+vector<vec3> getCrossVertex(float x, float y, float z)
+{
+    float w = blockWidth;
+
+    return
+    {
+        // Diagonal from the (x, z) corner across to (x + w, z + w).
+        {x, y, z},
+        {x + w, y, z + w},
+        {x + w, y + w, z + w},
+        {x + w, y + w, z + w},
+        {x, y + w, z},
+        {x, y, z},
+
+        // Diagonal running the other way.
+        {x + w, y, z},
+        {x, y, z + w},
+        {x, y + w, z + w},
+        {x, y + w, z + w},
+        {x + w, y + w, z},
+        {x + w, y, z}
+    };
+}
+
+
+vector<vec2> getTextureCoords(BLOCK blockID, SIDE side)
+{
+    // The four side faces are not wound the same way. getSideVertex emits north
+    // and south as bottom, top, top, top, bottom, bottom, and east and west as
+    // bottom, bottom, top, top, top, bottom, so a single list of texture
+    // coordinates cannot serve both: whichever pair it does not match comes out
+    // rotated a quarter turn. Only the grass side used to correct for this,
+    // which was enough while every other side texture was isotropic noise that
+    // looks the same rotated. A log, a pumpkin and sandstone are not, and came
+    // out with their grain running across some faces and along others.
+    bool altCoords = (side == NORTH || side == SOUTH);
 
     if (blockID == GRASS && side == BOTTOM)
     {
         blockID = DIRT;
     }
-    else if (blockID == GRASS && side != TOP) 
+    else if (blockID == GRASS && side != TOP)
     {
         blockID = GRASS_SIDE;
-        if (side == NORTH || side == SOUTH) {
-            altCoords = true;
-        }
+    }
+    // Blocks whose faces do not all share one tile are stored under the id of
+    // their side tile, so the differing faces are swapped in here. The aliases
+    // at the bottom of BlockData.hpp name the storage ids.
+    else if (blockID == OAK_LOG_SIDE && (side == TOP || side == BOTTOM))
+    {
+        blockID = OAK_LOG_TOP;
+    }
+    else if (blockID == PUMPKIN_SIDE && (side == TOP || side == BOTTOM))
+    {
+        blockID = PUMPKIN_TOP;
+    }
+    else if (blockID == SANDSTONE_SIDE && side == TOP)
+    {
+        blockID = SANDSTONE_TOP;
+    }
+    else if (blockID == SANDSTONE_SIDE && side == BOTTOM)
+    {
+        blockID = SANDSTONE_BOTTOM;
+    }
+    else if (blockID == CACTUS_SIDE && side == TOP)
+    {
+        blockID = CACTUS_TOP;
+    }
+    else if (blockID == CACTUS_SIDE && side == BOTTOM)
+    {
+        blockID = CACTUS_BOTTOM;
     }
 
     float startX = ((blockID - 1) % 16) * 0.0625;
     float startY = (int((blockID - 1) / 16)) * 0.0625;
 
-    if (altCoords) 
+    if (altCoords)
     {
-        return 
+        return
         {
             {startX, startY + 0.0625},
             {startX, startY},
@@ -115,7 +227,7 @@ vector<vec2> getTextureCoords(BLOCK blockID, SIDE side)
         };
     }
 
-    return 
+    return
     {
         {startX + 0.0625, startY + 0.0625},
         {startX, startY + 0.0625},
@@ -127,6 +239,22 @@ vector<vec2> getTextureCoords(BLOCK blockID, SIDE side)
 }
 
 
+namespace
+{
+    // A face is drawn unless the block beside it hides it. Two blocks of the
+    // same see-through kind hide each other, so a body of water does not get a
+    // surface meshed between every pair of blocks inside it, and a canopy does
+    // not mesh the inside of itself.
+    bool showFace(unsigned short block, unsigned short neighbour)
+    {
+        if (isOpaque(neighbour))
+            return false;
+
+        return block != neighbour;
+    }
+}
+
+
 Chunk::Chunk() {}
 
 
@@ -135,229 +263,120 @@ Chunk::Chunk(int start_x, int start_y) {
 }
 
 
-void Chunk::Generate(FastNoise &heightGen, FastNoise &gravel, FastNoise &dirt) 
-{    
-    unsigned short heightMap[16][16] = {0};
-    for (int i = 0; i < 16; i++) 
-    {
-        for (int j = 0; j < 16; j++) 
-        {
-            double worldX = (chunkPos.x * 16 + i) * 3.125f;
-            double worldZ = (chunkPos.y * 16 + j) * 3.125f;
-            int height = (int)(heightGen.GetNoise(worldX, worldZ) * 30 + 45);
-            heightMap[i][j] = height;
-        }
-    }
-
-    for (int x = 0; x < 16; x++) 
-    {
-        for (int z = 0; z < 16; z++) 
-        {
-            for (int y = 0; y < 255; y++) 
-            {
-                if (y <= heightMap[x][z]) 
-                {
-                    blockMap[x][y][z] = STONE;
-                }
-                else 
-                {
-                    blockMap[x][y][z] = AIR;
-                }
-            }
-        }
-    }
-
-    for (int x = 0; x < 16; x++) 
-    {
-        for (int z = 0; z < 16; z++) 
-        {
-            for (int y = 0; y < 255; y++) 
-            {
-                if (blockMap[x][y][z] == AIR)
-                    continue;
-
-                double worldX = (chunkPos.x * 16 + x) * 3;
-                double worldZ = (chunkPos.y * 16 + z) * 3;
-
-                if (gravel.GetNoise(worldX, (double)(y * 3), worldZ) < 0.3) 
-                { 
-                    blockMap[x][y][z] = GRAVEL;
-                }
-
-                if (dirt.GetNoise(worldX, (double)(y * 3), worldZ) < 0.3) 
-                { 
-                    blockMap[x][y][z] = DIRT;
-                }
-            }
-        }
-    }
-
-    for (int x = 0; x < 16; x++) 
-    {
-        for (int z = 0; z < 16; z++) 
-        {
-            for (int y = 0; y < 255; y++) 
-            {
-                if (blockMap[x][y][z] == AIR)
-                    continue;
-
-                int dirtLayer = 3 + rand() % 2;
-                if (y == 0) 
-                {
-                    blockMap[x][y][z] = BEDROCK;
-                }
-                else if (y == heightMap[x][z]) 
-                {
-                    blockMap[x][y][z] = GRASS;
-                }
-                else if (y >= heightMap[x][z] - dirtLayer) 
-                {
-                    blockMap[x][y][z] = DIRT;
-                }
-            }
-        }
-    }
-}
-
-
-void Chunk::CreateObject() 
+void Chunk::CreateObject()
 {
-    chunk.Create(vertices, uvCoords);
+    _solid.Create(_solidVertices, _solidUvs);
+    _water.Create(_waterVertices, _waterUvs);
 }
 
 
-void Chunk::Cleanup() 
+void Chunk::Cleanup()
 {
-    vertices.clear();
-    uvCoords.clear();
+    _solidVertices.clear();
+    _solidUvs.clear();
+    _waterVertices.clear();
+    _waterUvs.clear();
 }
 
 
-bool Chunk::isChunkSaved() 
+bool Chunk::isChunkSaved()
 {
     return false;
 }
 
 
-void Chunk::Draw() 
+void Chunk::Draw()
 {
-    chunk.Draw();
+    _solid.Draw();
 }
 
 
-void Chunk::MakeVertexObject(Chunk &negativeX, Chunk &positiveX, Chunk &negativeZ, Chunk &positiveZ)
+void Chunk::DrawWater()
 {
-    for (unsigned x = 0; x < 16; x++) 
+    _water.Draw();
+}
+
+
+void Chunk::AppendFace(bool water, const vector<vec3>& faceVertices, const vector<vec2>& faceUvs)
+{
+    vector<vec3>& vertices = water ? _waterVertices : _solidVertices;
+    vector<vec2>& uvs = water ? _waterUvs : _solidUvs;
+
+    vertices.insert(vertices.end(), faceVertices.begin(), faceVertices.end());
+    uvs.insert(uvs.end(), faceUvs.begin(), faceUvs.end());
+}
+
+
+void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positiveX,
+                             const BlockMap& negativeZ, const BlockMap& positiveZ)
+{
+    const BlockMap& self = *blocks;
+
+    for (int x = 0; x < CHUNK_WIDTH; x++)
     {
-        for (unsigned y = 0; y < 255; y++) 
+        for (int y = 0; y < CHUNK_HEIGHT; y++)
         {
-            for (unsigned z = 0; z < 16; z++) 
+            for (int z = 0; z < CHUNK_WIDTH; z++)
             {
-                int blockID = blockMap[x][y][z];
-                if (blockID == 0)
+                unsigned short block = self.Get(x, y, z);
+                if (block == AIR)
                     continue;
 
-                vec3 blockPos(x / 16.0f, y / 16.0f, z / 16.0f);
+                float worldX = x / 16.0f + chunkPos.x;
+                float worldY = y / 16.0f;
+                float worldZ = z / 16.0f + chunkPos.y;
 
-                bool sides[] = {false, false, false, false, false, false};
+                if (isCross(block))
+                {
+                    // Two quads, so the six texture coordinates a single quad
+                    // needs are laid down twice.
+                    vector<vec2> tileUvs = getTextureCoords((BLOCK)block, NO_SIDE);
+                    vector<vec2> crossUvs(tileUvs);
+                    crossUvs.insert(crossUvs.end(), tileUvs.begin(), tileUvs.end());
 
-                // TOP
-                if (y == 254) 
-                {
-                    sides[0] = true;
-                }
-                else if (blockMap[x][y + 1][z] == 0) 
-                {
-                    sides[0] = true;
-                }
-
-                // BOTTOM
-                if (y == 0) 
-                {
-                    sides[1] = true;
-                }
-                else if (blockMap[x][y - 1][z] == 0) 
-                {
-                    sides[1] = true;
+                    AppendFace(false, getCrossVertex(worldX, worldY, worldZ), crossUvs);
+                    continue;
                 }
 
-                // NORTH
-                if (x == 0 && negativeX.blockMap[15][y][z] == 0) 
+                bool water = (block == WATER);
+
+                // Nothing is generated above or below the column, so both ends
+                // are treated as open air.
+                const unsigned short outside = AIR;
+
+                unsigned short neighbours[6];
+                neighbours[TOP]    = (y == CHUNK_HEIGHT - 1) ? outside : self.Get(x, y + 1, z);
+                neighbours[BOTTOM] = (y == 0)                ? outside : self.Get(x, y - 1, z);
+                neighbours[NORTH]  = (x == 0)               ? negativeX.Get(CHUNK_WIDTH - 1, y, z) : self.Get(x - 1, y, z);
+                neighbours[EAST]   = (z == CHUNK_WIDTH - 1) ? positiveZ.Get(x, y, 0)               : self.Get(x, y, z + 1);
+                neighbours[SOUTH]  = (x == CHUNK_WIDTH - 1) ? positiveX.Get(0, y, z)               : self.Get(x + 1, y, z);
+                neighbours[WEST]   = (z == 0)               ? negativeZ.Get(x, y, CHUNK_WIDTH - 1) : self.Get(x, y, z - 1);
+
+                if (block == CACTUS)
                 {
-                    sides[2] = true;
-                }
-                else if (x != 0) 
-                {
-                    if (blockMap[x - 1][y][z] == 0) 
+                    for (int side = 0; side < 6; side++)
                     {
-                        sides[2] = true;
+                        // Only the faces between two stacked cactus blocks are
+                        // hidden. Being narrower than a block, a cactus never
+                        // has anything flush against its sides to hide them.
+                        if (neighbours[side] == CACTUS)
+                            continue;
+
+                        AppendFace(false,
+                                   getCactusVertex(worldX, worldY, worldZ, (SIDE)side),
+                                   insetTile(getTextureCoords((BLOCK)block, (SIDE)side)));
                     }
+                    continue;
                 }
 
-                // EAST
-                if (z == 15 && positiveZ.blockMap[x][y][0] == 0) 
+                for (int side = 0; side < 6; side++)
                 {
-                    sides[3] = true;
-                }
-                else if (z != 15) 
-                {
-                    if (blockMap[x][y][z + 1] == 0) 
-                    {
-                        sides[3] = true;
-                    }
-                }
-
-                // SOUTH
-                if (x == 15 && positiveX.blockMap[0][y][z] == 0) 
-                {
-                    sides[4] = true;
-                }
-                if (x != 15) 
-                {
-                    if (blockMap[x + 1][y][z] == 0) 
-                    {
-                        sides[4] = true;
-                    }
-                }
-
-                // WEST
-                if (z == 0 && negativeZ.blockMap[x][y][15] == 0) 
-                {
-                    sides[5] = true;
-                }
-                if (z != 0) 
-                {
-                    if (blockMap[x][y][z - 1] == 0) 
-                    {
-                        sides[5] = true;
-                    }
-                }
-
-                for (unsigned i = 0; i < 6; i++) 
-                {
-                    if (!sides[i])
+                    if (!showFace(block, neighbours[side]))
                         continue;
 
-                    vector<vec3> tempVertices = getSideVertex(blockPos.x + chunkPos.x, blockPos.y, blockPos.z + chunkPos.y, (SIDE)i);
-                    vector<vec2> tempUV = getTextureCoords((BLOCK)blockID, (SIDE)i);
-
-                    if (vertices.size() == 0) 
-                    {
-                        vertices = tempVertices;
-                    }
-                    else 
-                    {
-                        vertices.insert(vertices.end(), tempVertices.begin(), tempVertices.end());
-                    }
-
-                    if (uvCoords.size() == 0) 
-                    {
-                        uvCoords = tempUV;
-                    }
-                    else 
-                    {
-                        uvCoords.insert(uvCoords.end(), tempUV.begin(), tempUV.end());
-                    }
+                    AppendFace(water,
+                               getSideVertex(worldX, worldY, worldZ, (SIDE)side),
+                               getTextureCoords((BLOCK)block, (SIDE)side));
                 }
             }
         }

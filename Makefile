@@ -5,7 +5,7 @@ WARNINGS=-Wall -Wextra
 
 # Project sources are built with warnings enabled. The vendored sources below
 # are third party and are built without them, so the build stays quiet.
-PROJECT_SRCS=src/main.cpp src/Chunk.cpp src/Controls.cpp src/Object.cpp src/Shader.cpp src/World.cpp
+PROJECT_SRCS=src/main.cpp src/Chunk.cpp src/Controls.cpp src/Features.cpp src/Object.cpp src/Shader.cpp src/TerrainGen.cpp src/World.cpp
 VENDOR_CXX_SRCS=src/FastNoise.cpp
 VENDOR_C_SRCS=src/glad.c
 
