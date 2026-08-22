@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "headers/ColumnCache.hpp"
 #include "headers/Features.hpp"
 #include "headers/WorldRandom.hpp"
 
@@ -64,6 +65,28 @@ namespace
     const float POOL_BEGINS = 0.05f;
     const float POOL_FULL = 0.30f;
 
+    // How far past the last visible block the material noise is still worked out.
+    //
+    // Zero is exact for what is drawn. Hashing every block the mesher would emit
+    // a face for, over a hundred chunks, gives the same answer at zero as it
+    // does with the noise run down the whole column -- only the buried blocks
+    // differ, and nothing can see those. The margin exists because the world has
+    // no digging yet: the moment a block can be broken, the block behind it
+    // wants to be the gravel or dirt the noise would have put there rather than
+    // flat stone.
+    //
+    // It is not free, measured with bench/ at ms per chunk:
+    //
+    //     margin 0    0.22        margin 4    0.71
+    //     margin 2    0.44        margin 8    1.16
+    //
+    // so a margin big enough to matter for digging costs more than the whole
+    // rest of generation. Kept at zero while nothing digs. When something does,
+    // the answer is not to raise this -- it is to run the column through the
+    // full fill again on the first break, which costs one column once instead of
+    // every column always.
+    const int MATERIAL_VISIBILITY_MARGIN = 0;
+
     float clampf(float value, float low, float high)
     {
         return std::min(std::max(value, low), high);
@@ -101,12 +124,21 @@ TerrainGen::TerrainGen(uint64_t seed)
 {
     _seed = seed;
 
+    // Six octaves, not sixteen. Lacunarity doubles the frequency each time, so
+    // from a base of 0.00153 the sixteenth octave lands near 50 -- far past one
+    // cycle per block, which is the most a per-block sample can carry. Those
+    // octaves were sampling noise finer than the world can hold and folding it
+    // back in as a contribution of under a thousandth of a block of height.
     _heightNoise.SetSeed(static_cast<int>(seed));
     _heightNoise.SetNoiseType(FastNoise::PerlinFractal);
     _heightNoise.SetFrequency(0.00153f);
-    _heightNoise.SetFractalOctaves(16);
+    _heightNoise.SetFractalOctaves(6);
 
     _gravelNoise.SetSeed(static_cast<int>(seed));
+    // The fractal settings below do nothing: FastNoise only applies octaves,
+    // lacunarity and gain to the *Fractal noise types, and Cellular is not one.
+    // They are left in place because removing them would change nothing, and
+    // noted here so the next reader does not tune numbers that are never read.
     _gravelNoise.SetNoiseType(FastNoise::Cellular);
     _gravelNoise.SetFrequency(0.03f);
     _gravelNoise.SetFractalOctaves(6);
@@ -163,6 +195,20 @@ TerrainGen::TerrainGen(uint64_t seed)
 
 void TerrainGen::GenerateChunk(BlockMap& map, int chunkX, int chunkZ) const
 {
+    // One pass over the noise for the whole chunk and its margin. The fill needs
+    // the margin too, because how deep a column can be seen depends on the
+    // columns beside it, and at a chunk edge those are in the next chunk over.
+    ColumnCache cache;
+    for (int x = 0; x < PADDED_WIDTH; x++)
+    {
+        for (int z = 0; z < PADDED_WIDTH; z++)
+        {
+            int worldX = chunkX * CHUNK_WIDTH + x - DECORATION_MARGIN;
+            int worldZ = chunkZ * CHUNK_WIDTH + z - DECORATION_MARGIN;
+            cache.columns[x][z] = ColumnAt(worldX, worldZ);
+        }
+    }
+
     for (int x = 0; x < CHUNK_WIDTH; x++)
     {
         for (int z = 0; z < CHUNK_WIDTH; z++)
@@ -170,12 +216,20 @@ void TerrainGen::GenerateChunk(BlockMap& map, int chunkX, int chunkZ) const
             int worldX = chunkX * CHUNK_WIDTH + x;
             int worldZ = chunkZ * CHUNK_WIDTH + z;
 
-            FillColumn(map, x, z, worldX, worldZ, ColumnAt(worldX, worldZ));
+            const ColumnInfo& column = cache.At(x, z);
+
+            // A block sits in daylight only if it is higher than the ground in
+            // at least one of the four directions, so the deepest block that
+            // can ever be seen from the side is one above the lowest of them.
+            int visibleDepth = std::max(0, column.surfaceY - cache.LowestNeighbour(x, z) - 1)
+                               + MATERIAL_VISIBILITY_MARGIN;
+
+            FillColumn(map, x, z, worldX, worldZ, column, visibleDepth);
         }
     }
 
     // Terrain has to be complete before anything is stood on top of it.
-    DecorateChunk(map, *this, _seed, chunkX, chunkZ);
+    DecorateChunk(map, cache, *this, _seed, chunkX, chunkZ);
 }
 
 
@@ -259,7 +313,8 @@ unsigned short TerrainGen::SurfaceBlock(int worldX, int worldZ, const ColumnInfo
 
 
 void TerrainGen::FillColumn(BlockMap& map, int localX, int localZ,
-                            int worldX, int worldZ, const ColumnInfo& column) const
+                            int worldX, int worldZ, const ColumnInfo& column,
+                            int visibleDepth) const
 {
     // How deep the dirt runs under the grass. This was a rand() call made once
     // per block, which meant it varied within a single column and differed run
@@ -306,16 +361,26 @@ void TerrainGen::FillColumn(BlockMap& map, int localX, int localZ,
     double materialX = worldX * MATERIAL_NOISE_SCALE;
     double materialZ = worldZ * MATERIAL_NOISE_SCALE;
 
+    // Everything below this is buried on all four sides and can only ever be
+    // stone, so the two cellular lookups below are skipped for it. They are the
+    // whole cost of generating a chunk -- a little over five milliseconds of the
+    // five and a half -- and the mean column only shows about one block of its
+    // depth, so nearly all of that work was for blocks nobody can see.
+    int deepestVisibleY = column.surfaceY - visibleDepth;
+
     for (int y = 0; y <= column.surfaceY; y++)
     {
         int depth = column.surfaceY - y;
         unsigned short block = STONE;
 
-        if (_gravelNoise.GetNoise(materialX, y * MATERIAL_NOISE_SCALE, materialZ) < 0.3)
-            block = GRAVEL;
+        if (y >= deepestVisibleY)
+        {
+            if (_gravelNoise.GetNoise(materialX, y * MATERIAL_NOISE_SCALE, materialZ) < 0.3)
+                block = GRAVEL;
 
-        if (_dirtNoise.GetNoise(materialX, y * MATERIAL_NOISE_SCALE, materialZ) < 0.3)
-            block = DIRT;
+            if (_dirtNoise.GetNoise(materialX, y * MATERIAL_NOISE_SCALE, materialZ) < 0.3)
+                block = DIRT;
+        }
 
         if (y == 0)
         {
@@ -349,8 +414,8 @@ void TerrainGen::FillColumn(BlockMap& map, int localX, int localZ,
         map.Set(localX, y, localZ, WATER);
     }
 
-    for (int y = std::max(column.surfaceY, terrain::SEA_LEVEL) + 1; y < CHUNK_HEIGHT; y++)
-    {
-        map.Set(localX, y, localZ, AIR);
-    }
+    // No air fill above the column. A BlockMap starts out all air, every map is
+    // built once and never reused, and AIR is zero, so writing it back over the
+    // sixty-odd empty blocks at the top of each of the 256 columns was fifteen
+    // thousand stores a chunk to leave memory exactly as it was found.
 }

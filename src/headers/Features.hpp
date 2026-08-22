@@ -3,12 +3,8 @@
 #include <cstdint>
 
 #include "BlockMap.hpp"
+#include "ColumnCache.hpp"
 #include "TerrainGen.hpp"
-
-// How far outside its own chunk a feature rooted elsewhere can reach. Set by
-// the widest thing that gets placed, which is a tree canopy at two blocks out
-// from the trunk.
-const int DECORATION_MARGIN = 2;
 
 // Puts trees, plants and pumpkins on top of a chunk of finished terrain.
 //
@@ -20,5 +16,7 @@ const int DECORATION_MARGIN = 2;
 // outside its own bounds. The neighbour scans the same margin, finds the same
 // tree, and keeps the half this one dropped. Both agree because placement is a
 // pure function of the seed and the world coordinate.
-void DecorateChunk(BlockMap& map, const TerrainGen& terrain, uint64_t seed,
-                   int chunkX, int chunkZ);
+// The column cache is built by the caller and shared with the fill, rather than
+// being worked out again here.
+void DecorateChunk(BlockMap& map, const ColumnCache& cache, const TerrainGen& terrain,
+                   uint64_t seed, int chunkX, int chunkZ);

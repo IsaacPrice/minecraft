@@ -24,7 +24,30 @@ namespace
     float speed = 3.0f;
     float mouseSpeed = 0.001f;
 
+    // Overwritten by setViewDistance before the first frame. The default keeps
+    // the projection sane if it never is.
+    float viewDistance = 32.0f;
+
     const float radian = 180.f / 3.14159265359f;
+}
+
+void setViewDistance(float chunks)
+{
+    viewDistance = chunks;
+}
+
+// The fog band ends just inside the loaded region, so the last ring of chunks
+// is already sky-coloured by the time it is reached and popping in at the edge
+// is invisible. It starts three quarters of the way out, which is far enough
+// that fog reads as haze rather than as a wall.
+float getFogStart()
+{
+    return (viewDistance - 1.0f) * 0.75f;
+}
+
+float getFogEnd()
+{
+    return viewDistance - 1.0f;
 }
 
 glm::mat4 getViewMatrix()
@@ -95,7 +118,12 @@ void computeMatricesFromInputs()
     // translation unit, so a static initialiser here would depend on init order.
     float aspectRatio = (float)width / (float)height;
 
-    ProjectionMatrix = glm::perspective(glm::radians(initialFoV), aspectRatio, 0.1f, 100.0f);
+    // The far plane only has to reach the corner of the loaded square, which is
+    // the radius times root two. The extra half unit keeps a chunk that is just
+    // inside that corner from being clipped by it.
+    float farPlane = viewDistance * 1.5f;
+
+    ProjectionMatrix = glm::perspective(glm::radians(initialFoV), aspectRatio, 0.1f, farPlane);
     ViewMatrix = glm::lookAt(position, position + direction, up);
 
     lastTime = currentTime;

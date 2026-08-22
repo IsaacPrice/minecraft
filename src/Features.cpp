@@ -50,25 +50,6 @@ namespace
                             : -(((-value) + divisor - 1) / divisor);
     }
 
-    const int PADDED_WIDTH = CHUNK_WIDTH + 2 * DECORATION_MARGIN;
-
-    // The terrain of every column this chunk might need, including the margin
-    // outside it. Worked out once and shared by all the features, because
-    // several of them ask about the same columns and about their neighbours.
-    struct ColumnCache
-    {
-        ColumnInfo columns[PADDED_WIDTH][PADDED_WIDTH];
-
-        // Indexed in chunk-local coordinates, which run from -DECORATION_MARGIN
-        // to CHUNK_WIDTH + DECORATION_MARGIN - 1.
-        const ColumnInfo& At(int localX, int localZ) const
-        {
-            int x = std::min(std::max(localX + DECORATION_MARGIN, 0), PADDED_WIDTH - 1);
-            int z = std::min(std::max(localZ + DECORATION_MARGIN, 0), PADDED_WIDTH - 1);
-            return columns[x][z];
-        }
-    };
-
     // Writes a block only onto air, so decoration never eats the terrain it
     // stands on, never carves into water, and never overwrites another feature.
     void placeOnAir(BlockMap& map, int localX, int y, int localZ, unsigned short block)
@@ -356,20 +337,9 @@ namespace
 }
 
 
-void DecorateChunk(BlockMap& map, const TerrainGen& terrain, uint64_t seed,
-                   int chunkX, int chunkZ)
+void DecorateChunk(BlockMap& map, const ColumnCache& cache, const TerrainGen& terrain,
+                   uint64_t seed, int chunkX, int chunkZ)
 {
-    ColumnCache cache;
-    for (int x = 0; x < PADDED_WIDTH; x++)
-    {
-        for (int z = 0; z < PADDED_WIDTH; z++)
-        {
-            int worldX = chunkX * CHUNK_WIDTH + x - DECORATION_MARGIN;
-            int worldZ = chunkZ * CHUNK_WIDTH + z - DECORATION_MARGIN;
-            cache.columns[x][z] = terrain.ColumnAt(worldX, worldZ);
-        }
-    }
-
     // Trees before ground cover, so a plant is never left standing inside a
     // trunk or under a canopy block that arrived after it.
     placeTrees(map, cache, terrain, seed, chunkX, chunkZ);

@@ -1,10 +1,11 @@
 #include "headers/Object.hpp"
 
+#include <cstddef>
 #include <cstdio>
 #include <utility>
+#include <vector>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "headers/stb_image.h"
+#include "headers/TextureAtlas.hpp"
 
 namespace
 {
@@ -12,19 +13,73 @@ namespace
     GLuint terrainTexture = 0;
     GLint terrainSamplerUniform = -1;
 
-    void ensureTerrainTexture()
+    // Every quad in every chunk is indexed the same way -- four corners, two
+    // triangles, 0 1 2 2 3 0 -- so one element buffer serves the whole world
+    // instead of each chunk carrying a copy. Indexing at all is worth four
+    // vertices a quad instead of six: the two shared corners used to be written
+    // out, uploaded and transformed twice over.
+    GLuint sharedIndexBuffer = 0;
+    size_t sharedIndexQuads = 0;
+
+    // Grows the shared index buffer to cover at least this many quads. The GL
+    // name never changes, only the storage behind it, which matters because
+    // every chunk's vertex array records that name and would otherwise be left
+    // pointing at a buffer that had been deleted.
+    void ensureIndexCapacity(size_t quads)
     {
-        if (terrainTexture != 0)
+        if (quads <= sharedIndexQuads)
             return;
 
-        terrainTexture = loadPNG("content/terrain.png");
-        terrainSamplerUniform = glGetUniformLocation(programID, "myTextureSampler");
+        size_t capacity = sharedIndexQuads ? sharedIndexQuads : 2048;
+        while (capacity < quads)
+            capacity *= 2;
+
+        std::vector<GLuint> indices;
+        indices.reserve(capacity * 6);
+        for (size_t quad = 0; quad < capacity; quad++)
+        {
+            GLuint base = static_cast<GLuint>(quad * 4);
+            indices.push_back(base + 0);
+            indices.push_back(base + 1);
+            indices.push_back(base + 2);
+            indices.push_back(base + 2);
+            indices.push_back(base + 3);
+            indices.push_back(base + 0);
+        }
+
+        if (sharedIndexBuffer == 0)
+            glGenBuffers(1, &sharedIndexBuffer);
+
+        // Filled through the array target rather than the element target on
+        // purpose: the element binding belongs to whichever vertex array is
+        // current, and filling the buffer here must not disturb one.
+        glBindBuffer(GL_ARRAY_BUFFER, sharedIndexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        sharedIndexQuads = capacity;
     }
 }
 
-Object::Object(std::vector<glm::vec3>& vertex, std::vector<glm::vec2>& uvs)
+void InitRenderResources()
 {
-    Create(vertex, uvs);
+    if (terrainTexture != 0)
+        return;
+
+    terrainTexture = LoadBlockAtlasArray("content/terrain.png", 16);
+    terrainSamplerUniform = glGetUniformLocation(programID, "myTextureSampler");
+}
+
+void BindTerrainTexture()
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, terrainTexture);
+    glUniform1i(terrainSamplerUniform, 0);
+}
+
+Object::Object(const std::vector<Vertex>& vertices)
+{
+    Create(vertices);
 }
 
 Object::~Object()
@@ -35,13 +90,11 @@ Object::~Object()
 Object::Object(Object&& other) noexcept
     : VertexArrayID(other.VertexArrayID),
       vertexBuffer(other.vertexBuffer),
-      uvBuffer(other.uvBuffer),
-      vertices_size(other.vertices_size)
+      indexCount(other.indexCount)
 {
     other.VertexArrayID = 0;
     other.vertexBuffer = 0;
-    other.uvBuffer = 0;
-    other.vertices_size = 0;
+    other.indexCount = 0;
 }
 
 Object& Object::operator=(Object&& other) noexcept
@@ -53,13 +106,11 @@ Object& Object::operator=(Object&& other) noexcept
 
     VertexArrayID = other.VertexArrayID;
     vertexBuffer = other.vertexBuffer;
-    uvBuffer = other.uvBuffer;
-    vertices_size = other.vertices_size;
+    indexCount = other.indexCount;
 
     other.VertexArrayID = 0;
     other.vertexBuffer = 0;
-    other.uvBuffer = 0;
-    other.vertices_size = 0;
+    other.indexCount = 0;
 
     return *this;
 }
@@ -70,110 +121,74 @@ void Object::release()
     // destroyed there if the world shuts down mid-build. Those Objects never
     // had buffers generated, so returning early keeps GL calls on the render
     // thread where they belong.
-    if (VertexArrayID == 0 && vertexBuffer == 0 && uvBuffer == 0)
+    if (VertexArrayID == 0 && vertexBuffer == 0)
     {
-        vertices_size = 0;
+        indexCount = 0;
         return;
     }
 
     glDeleteBuffers(1, &vertexBuffer);
-    glDeleteBuffers(1, &uvBuffer);
     glDeleteVertexArrays(1, &VertexArrayID);
 
     vertexBuffer = 0;
-    uvBuffer = 0;
     VertexArrayID = 0;
-    vertices_size = 0;
+    indexCount = 0;
 }
 
-void Object::Create(std::vector<glm::vec3>& vertex, std::vector<glm::vec2>& uvs)
+void Object::Create(const std::vector<Vertex>& vertices)
 {
     // Create() is called again when the render distance changes, so drop any
     // buffers this Object already owns rather than leaking them.
     release();
 
-    vertices_size = static_cast<GLsizei>(vertex.size());
-
-    if (vertex.empty() || uvs.empty())
+    if (vertices.empty())
         return;
 
+    size_t quads = vertices.size() / 4;
+    indexCount = static_cast<GLsizei>(quads * 6);
+
+    ensureIndexCapacity(quads);
+
+    // The attribute layout is recorded into this chunk's own vertex array
+    // object, so drawing is a bind and a draw rather than respecifying every
+    // pointer. That is not just faster: the old code never bound a vertex array
+    // at all in Draw, and leaned on whichever one Create happened to leave bound.
+    // Deleting a bound vertex array reverts the binding to zero, and in a core
+    // profile drawing with no vertex array bound is an error that draws nothing,
+    // so unloading the chunk that owned the bound array turned every remaining
+    // draw that frame into a no-op and the screen went black for a frame.
     glGenVertexArrays(1, &VertexArrayID);
     glBindVertexArray(VertexArrayID);
 
     glGenBuffers(1, &vertexBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, vertex.size() * sizeof(glm::vec3), &vertex[0], GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
 
-    glGenBuffers(1, &uvBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
-    glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(glm::vec2), &uvs[0], GL_STATIC_DRAW);
-
-    ensureTerrainTexture();
-}
-
-void Object::Draw()
-{
-    if (vertices_size == 0)
-        return;
-
+    // Position is an integer the shader unpacks, so it takes the integer
+    // attribute path. The ordinary one would convert it to a float on the way
+    // in and lose the packing.
     glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    glVertexAttribIPointer(0, 1, GL_UNSIGNED_INT, sizeof(Vertex),
+                           (void*)offsetof(Vertex, position));
 
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    glVertexAttribIPointer(1, 1, GL_UNSIGNED_SHORT, sizeof(Vertex),
+                           (void*)offsetof(Vertex, texture));
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, terrainTexture);
-    glUniform1i(terrainSamplerUniform, 0);
+    glEnableVertexAttribArray(2);
+    glVertexAttribIPointer(2, 2, GL_SHORT, sizeof(Vertex),
+                           (void*)offsetof(Vertex, chunkX));
 
-    glDrawArrays(GL_TRIANGLES, 0, vertices_size);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sharedIndexBuffer);
 
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
+    glBindVertexArray(0);
 }
 
-GLuint loadPNG(const char* imagepath, bool useAlphaChannel)
+void Object::Draw() const
 {
-    int width, height, nrChannels;
-    unsigned char* data = stbi_load(imagepath, &width, &height, &nrChannels, 0);
-    if (!data)
-    {
-        printf("%s could not be opened. Is the working directory the project root?\n", imagepath);
-        return 0;
-    }
+    if (indexCount == 0)
+        return;
 
-    GLenum format;
-    if (nrChannels == 1)
-        format = GL_RED;
-    else if (nrChannels == 3)
-        format = useAlphaChannel ? GL_RGBA : GL_RGB;
-    else if (nrChannels == 4)
-        format = GL_RGBA;
-    else
-    {
-        printf("%s has an unsupported channel count (%d).\n", imagepath, nrChannels);
-        stbi_image_free(data);
-        return 0;
-    }
-
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    // No mipmaps. Every block samples one 16x16 tile of a shared atlas, and the
-    // lower mip levels average across tile boundaries: solid blocks pick up a
-    // seam of whatever is next to them in the atlas, and the cut-out plant tiles
-    // are worse, because averaging their transparent pixels in drags the alpha
-    // under the cut-out threshold and eats the edges of the plant with distance.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    stbi_image_free(data);
-
-    return textureID;
+    glBindVertexArray(VertexArrayID);
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)0);
 }

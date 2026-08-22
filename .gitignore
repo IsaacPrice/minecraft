@@ -2,6 +2,8 @@
 /build/
 app
 app.exe
+benchmark
+benchmark.exe
 *.o
 
 # Editor / tooling
@@ -9,3 +11,4 @@ app.exe
 
 # Generated content
 /content/scripts/
+*.d
