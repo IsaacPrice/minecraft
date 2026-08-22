@@ -3,254 +3,149 @@
 using namespace std;
 using namespace glm;
 
-float blockWidth = 0.0625f;
-
-
-// One face of an arbitrary box. Blocks are cubes, but a cactus is narrower than
-// a block, so the corners are passed in rather than derived from blockWidth.
-static vector<vec3> getBoxFace(float x0, float y0, float z0,
-                               float x1, float y1, float z1, SIDE part)
-{
-    if (part == TOP)
-    {
-        return
-        {
-            {x0, y1, z0},
-            {x0, y1, z1},
-            {x1, y1, z1},
-            {x1, y1, z1},
-            {x1, y1, z0},
-            {x0, y1, z0}
-        };
-    }
-    else if (part == BOTTOM)
-    {
-        return
-        {
-            {x0, y0, z0},
-            {x1, y0, z0},
-            {x1, y0, z1},
-            {x1, y0, z1},
-            {x0, y0, z1},
-            {x0, y0, z0}
-        };
-    }
-    else if (part == NORTH)
-    {
-        return
-        {
-            {x0, y0, z0},
-            {x0, y1, z0},
-            {x0, y1, z1},
-            {x0, y1, z1},
-            {x0, y0, z1},
-            {x0, y0, z0}
-        };
-    }
-    else if (part == EAST)
-    {
-        return
-        {
-            {x0, y0, z1},
-            {x1, y0, z1},
-            {x1, y1, z1},
-            {x1, y1, z1},
-            {x0, y1, z1},
-            {x0, y0, z1}
-        };
-    }
-    else if (part == SOUTH)
-    {
-        return
-        {
-            {x1, y0, z0},
-            {x1, y1, z0},
-            {x1, y1, z1},
-            {x1, y1, z1},
-            {x1, y0, z1},
-            {x1, y0, z0}
-        };
-    }
-    else
-    {
-        return
-        {
-            {x0, y0, z0},
-            {x1, y0, z0},
-            {x1, y1, z0},
-            {x1, y1, z0},
-            {x0, y1, z0},
-            {x0, y0, z0}
-        };
-    }
-}
-
-
-vector<vec3> getSideVertex(float x, float y, float z, SIDE part)
-{
-    return getBoxFace(x, y, z, x + blockWidth, y + blockWidth, z + blockWidth, part);
-}
-
-
-// A cactus is a block narrower than the one it stands in. The atlas draws that
-// by leaving a transparent border around its tiles, which the cut-out threshold
-// would throw away, slitting the plant open along every corner. Pulling the
-// geometry in by the same one texel instead, and trimming that border off the
-// texture, gives the same silhouette with nothing see-through in it. Full block
-// height, so a stack of them meets cleanly.
-vector<vec3> getCactusVertex(float x, float y, float z, SIDE part)
-{
-    float inset = blockWidth / 16.0f;
-
-    return getBoxFace(x + inset, y, z + inset,
-                      x + blockWidth - inset, y + blockWidth, z + blockWidth - inset, part);
-}
-
-
-// Pulls texture coordinates in by one texel on every side, dropping the
-// transparent border of the cactus tiles now that the geometry carries it.
-vector<vec2> insetTile(const vector<vec2>& uvs)
-{
-    const float texel = 0.0625f / 16.0f;
-
-    float centreU = 0.0f, centreV = 0.0f;
-    for (size_t i = 0; i < uvs.size(); i++)
-    {
-        centreU += uvs[i].x;
-        centreV += uvs[i].y;
-    }
-    centreU /= uvs.size();
-    centreV /= uvs.size();
-
-    vector<vec2> pulled;
-    pulled.reserve(uvs.size());
-    for (size_t i = 0; i < uvs.size(); i++)
-    {
-        pulled.push_back({ uvs[i].x + (uvs[i].x < centreU ? texel : -texel),
-                           uvs[i].y + (uvs[i].y < centreV ? texel : -texel) });
-    }
-
-    return pulled;
-}
-
-
-// Plants mesh as two quads standing on the diagonals of the block instead of as
-// a cube. Both sides of each quad have to be visible, which works because face
-// culling is off. The vertex order matches getSideVertex, so a cross quad can
-// reuse the same texture coordinates a cube face would use.
-vector<vec3> getCrossVertex(float x, float y, float z)
-{
-    float w = blockWidth;
-
-    return
-    {
-        // Diagonal from the (x, z) corner across to (x + w, z + w).
-        {x, y, z},
-        {x + w, y, z + w},
-        {x + w, y + w, z + w},
-        {x + w, y + w, z + w},
-        {x, y + w, z},
-        {x, y, z},
-
-        // Diagonal running the other way.
-        {x + w, y, z},
-        {x, y, z + w},
-        {x, y + w, z + w},
-        {x, y + w, z + w},
-        {x + w, y + w, z},
-        {x + w, y, z}
-    };
-}
-
-
-vector<vec2> getTextureCoords(BLOCK blockID, SIDE side)
-{
-    // The four side faces are not wound the same way. getSideVertex emits north
-    // and south as bottom, top, top, top, bottom, bottom, and east and west as
-    // bottom, bottom, top, top, top, bottom, so a single list of texture
-    // coordinates cannot serve both: whichever pair it does not match comes out
-    // rotated a quarter turn. Only the grass side used to correct for this,
-    // which was enough while every other side texture was isotropic noise that
-    // looks the same rotated. A log, a pumpkin and sandstone are not, and came
-    // out with their grain running across some faces and along others.
-    bool altCoords = (side == NORTH || side == SOUTH);
-
-    if (blockID == GRASS && side == BOTTOM)
-    {
-        blockID = DIRT;
-    }
-    else if (blockID == GRASS && side != TOP)
-    {
-        blockID = GRASS_SIDE;
-    }
-    // Blocks whose faces do not all share one tile are stored under the id of
-    // their side tile, so the differing faces are swapped in here. The aliases
-    // at the bottom of BlockData.hpp name the storage ids.
-    else if (blockID == OAK_LOG_SIDE && (side == TOP || side == BOTTOM))
-    {
-        blockID = OAK_LOG_TOP;
-    }
-    else if (blockID == PUMPKIN_SIDE && (side == TOP || side == BOTTOM))
-    {
-        blockID = PUMPKIN_TOP;
-    }
-    else if (blockID == SANDSTONE_SIDE && side == TOP)
-    {
-        blockID = SANDSTONE_TOP;
-    }
-    else if (blockID == SANDSTONE_SIDE && side == BOTTOM)
-    {
-        blockID = SANDSTONE_BOTTOM;
-    }
-    else if (blockID == CACTUS_SIDE && side == TOP)
-    {
-        blockID = CACTUS_TOP;
-    }
-    else if (blockID == CACTUS_SIDE && side == BOTTOM)
-    {
-        blockID = CACTUS_BOTTOM;
-    }
-
-    float startX = ((blockID - 1) % 16) * 0.0625;
-    float startY = (int((blockID - 1) / 16)) * 0.0625;
-
-    if (altCoords)
-    {
-        return
-        {
-            {startX, startY + 0.0625},
-            {startX, startY},
-            {startX + 0.0625, startY},
-            {startX + 0.0625, startY},
-            {startX + 0.0625, startY + 0.0625},
-            {startX, startY + 0.0625},
-        };
-    }
-
-    return
-    {
-        {startX + 0.0625, startY + 0.0625},
-        {startX, startY + 0.0625},
-        {startX, startY},
-        {startX, startY},
-        {startX + 0.0625, startY},
-        {startX + 0.0625, startY + 0.0625},
-    };
-}
-
-
 namespace
 {
+    // Positions are integers in sixteenths of a block, which is the finest
+    // thing anything lands on: the inset a cactus is drawn with. A block is
+    // sixteen of them, and a chunk is sixteen blocks.
+    const int UNITS = VERTEX_UNITS_PER_BLOCK;
+
+    // Which corner of the box each of a face's four vertices takes: 0 for the
+    // low corner on that axis, 1 for the high one, indexed [side][vertex][axis].
+    //
+    // This was a chain of ifs, each returning a freshly built vector of six
+    // vec3. Meshing a chunk emits something like eight hundred faces and each
+    // one allocated twice -- once for the corners and once for the texture
+    // coordinates -- only to copy the result into the mesh and free it again.
+    // There are four corners rather than six now because the quads are indexed:
+    // the two corners the two triangles share are stored once.
+    //
+    // The winding is unchanged, and deliberately so: the four side faces are not
+    // wound alike, and appendTileUvs below still corrects for it.
+    const unsigned char FACE_CORNERS[6][4][3] =
+    {
+        { {0,1,0}, {0,1,1}, {1,1,1}, {1,1,0} },  // TOP
+        { {0,0,0}, {1,0,0}, {1,0,1}, {0,0,1} },  // BOTTOM
+        { {0,0,0}, {0,1,0}, {0,1,1}, {0,0,1} },  // NORTH
+        { {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} },  // EAST
+        { {1,0,0}, {1,1,0}, {1,1,1}, {1,0,1} },  // SOUTH
+        { {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0} },  // WEST
+    };
+
+    // Plants mesh as two quads standing on the block's diagonals rather than as
+    // a cube. Both sides of each quad have to be visible, which works because
+    // face culling is off.
+    //
+    // Face culling stays off, and not only for the plants. The box faces are not
+    // consistently wound -- NORTH and WEST come out with their normals pointing
+    // into the block rather than out of it -- so turning culling on would need
+    // those two rows reversed first. It is not worth doing yet: the plants would
+    // then have to move into a mesh of their own so they could keep both sides,
+    // which means a third draw call per chunk, and measuring this renderer shows
+    // it is bound by the number of draw calls rather than by the triangles in
+    // them. Dropping a seventh of the pixels moved the frame time by two per
+    // cent. Culling would trade GPU work this machine has to spare for CPU work
+    // it does not. Worth revisiting if the draw calls are ever batched down.
+    const unsigned char CROSS_CORNERS[2][4][3] =
+    {
+        { {0,0,0}, {1,0,1}, {1,1,1}, {0,1,0} },  // corner (x,z) across to (x+1,z+1)
+        { {1,0,0}, {0,0,1}, {0,1,1}, {1,1,0} },  // the other diagonal
+    };
+
+    // The corner of the tile each vertex samples, in the same two windings the
+    // faces come in. NORTH and SOUTH are emitted bottom, top, top, bottom, and
+    // the rest bottom, bottom, top, top, so a single list cannot serve both:
+    // whichever pair it does not match comes out rotated a quarter turn, which
+    // shows on a log, a pumpkin and sandstone.
+    const unsigned char TILE_CORNERS[2][4][2] =
+    {
+        { {1,1}, {0,1}, {0,0}, {1,0} },  // TOP, BOTTOM, EAST, WEST
+        { {0,1}, {0,0}, {1,0}, {1,1} },  // NORTH, SOUTH
+    };
+
     // A face is drawn unless the block beside it hides it. Two blocks of the
     // same see-through kind hide each other, so a body of water does not get a
-    // surface meshed between every pair of blocks inside it, and a canopy does
-    // not mesh the inside of itself.
+    // surface meshed between every pair of blocks inside it.
+    //
+    // Leaves are the exception, and this is the whole of what makes a canopy
+    // look full. A leaf tile is a scatter of leaves with gaps between them, so
+    // meshing only the outside of a canopy means looking through those gaps and
+    // finding nothing behind -- a hollow shell of leaf-patterned wrapping. Every
+    // leaf block drawing all six of its faces puts leaves behind those gaps, at
+    // every depth through the tree, and the layers reading against each other is
+    // what gives the canopy its density. It is the difference between fast and
+    // fancy graphics in Minecraft, which turns on this same decision.
     bool showFace(unsigned short block, unsigned short neighbour)
     {
         if (isOpaque(neighbour))
             return false;
 
+        if (block == LEAVES)
+            return true;
+
         return block != neighbour;
+    }
+
+    // Blocks whose faces do not all share one tile are stored under the id of
+    // their side tile, so the differing faces are swapped in here. The aliases
+    // at the bottom of BlockData.hpp name the storage ids.
+    BLOCK tileFor(BLOCK blockID, SIDE side)
+    {
+        if (blockID == GRASS && side == BOTTOM)
+            return DIRT;
+        if (blockID == GRASS && side != TOP)
+            return GRASS_SIDE;
+        if (blockID == OAK_LOG_SIDE && (side == TOP || side == BOTTOM))
+            return OAK_LOG_TOP;
+        if (blockID == PUMPKIN_SIDE && (side == TOP || side == BOTTOM))
+            return PUMPKIN_TOP;
+        if (blockID == SANDSTONE_SIDE && side == TOP)
+            return SANDSTONE_TOP;
+        if (blockID == SANDSTONE_SIDE && side == BOTTOM)
+            return SANDSTONE_BOTTOM;
+        if (blockID == CACTUS_SIDE && side == TOP)
+            return CACTUS_TOP;
+        if (blockID == CACTUS_SIDE && side == BOTTOM)
+            return CACTUS_BOTTOM;
+
+        return blockID;
+    }
+
+    // Appends one quad: four corners of a box face, tagged with the atlas tile
+    // that face samples and which corner of it each vertex takes.
+    //
+    // `inset` pulls the sampled area one texel in on every side, which is how
+    // the cactus drops the transparent border of its tiles now that its
+    // geometry carries the same inset.
+    void appendQuad(vector<Vertex>& out,
+                    const unsigned char corners[4][3],
+                    const int low[3], const int high[3],
+                    BLOCK blockID, SIDE side, bool inset,
+                    bool interiorLeaf, int chunkX, int chunkZ)
+    {
+        int tile = tileFor(blockID, side) - 1;
+
+        // Both are decided here and read by the vertex shader once it knows how
+        // far away the chunk is. The mesh itself does not change with distance:
+        // a canopy is a hollow shell whether its tiles are see-through or not,
+        // because two leaf blocks already hide the faces between them.
+        bool smallFoliage = isCross(blockID);
+        bool leaf = (blockID == LEAVES);
+
+        const unsigned char (*tileCorners)[2] = TILE_CORNERS[(side == NORTH || side == SOUTH) ? 1 : 0];
+
+        for (int v = 0; v < 4; v++)
+        {
+            Vertex vertex;
+            vertex.position = Vertex::PackPosition(corners[v][0] ? high[0] : low[0],
+                                                   corners[v][1] ? high[1] : low[1],
+                                                   corners[v][2] ? high[2] : low[2]);
+            vertex.texture = Vertex::PackTexture(tile, tileCorners[v][0], tileCorners[v][1],
+                                                 inset, smallFoliage, leaf, interiorLeaf);
+            vertex.chunkX = static_cast<int16_t>(chunkX);
+            vertex.chunkZ = static_cast<int16_t>(chunkZ);
+            out.push_back(vertex);
+        }
     }
 }
 
@@ -265,17 +160,18 @@ Chunk::Chunk(int start_x, int start_y) {
 
 void Chunk::CreateObject()
 {
-    _solid.Create(_solidVertices, _solidUvs);
-    _water.Create(_waterVertices, _waterUvs);
+    _solid.Create(_solidVertices);
+    _water.Create(_waterVertices);
 }
 
 
 void Chunk::Cleanup()
 {
-    _solidVertices.clear();
-    _solidUvs.clear();
-    _waterVertices.clear();
-    _waterUvs.clear();
+    // Swapping against an empty vector rather than clearing: clear leaves the
+    // capacity behind, and a meshed chunk holds tens of kilobytes of it that
+    // nothing reads again once the mesh is on the GPU.
+    vector<Vertex>().swap(_solidVertices);
+    vector<Vertex>().swap(_waterVertices);
 }
 
 
@@ -285,25 +181,33 @@ bool Chunk::isChunkSaved()
 }
 
 
-void Chunk::Draw()
+void Chunk::Draw() const
 {
     _solid.Draw();
 }
 
 
-void Chunk::DrawWater()
+void Chunk::DrawWater() const
 {
     _water.Draw();
 }
 
 
-void Chunk::AppendFace(bool water, const vector<vec3>& faceVertices, const vector<vec2>& faceUvs)
+void Chunk::SetBounds(int lowestBlockY, int highestBlockY)
 {
-    vector<vec3>& vertices = water ? _waterVertices : _solidVertices;
-    vector<vec2>& uvs = water ? _waterUvs : _solidUvs;
+    const float blockWidth = 1.0f / 16.0f;
 
-    vertices.insert(vertices.end(), faceVertices.begin(), faceVertices.end());
-    uvs.insert(uvs.end(), faceUvs.begin(), faceUvs.end());
+    // An empty chunk gets a degenerate box at its own corner, which the frustum
+    // will happily reject.
+    if (lowestBlockY > highestBlockY)
+    {
+        _boundsLow = glm::vec3(chunkPos.x, 0.0f, chunkPos.y);
+        _boundsHigh = _boundsLow;
+        return;
+    }
+
+    _boundsLow = glm::vec3(chunkPos.x, lowestBlockY * blockWidth, chunkPos.y);
+    _boundsHigh = glm::vec3(chunkPos.x + 1.0f, (highestBlockY + 1) * blockWidth, chunkPos.y + 1.0f);
 }
 
 
@@ -312,9 +216,25 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
 {
     const BlockMap& self = *blocks;
 
+    const int chunkX = static_cast<int>(chunkPos.x);
+    const int chunkZ = static_cast<int>(chunkPos.y);
+
+    // A typical chunk meshes to a little over three thousand vertices. Reserving
+    // for that up front takes a dozen reallocations and copies out of building
+    // every single chunk.
+    _solidVertices.reserve(4096);
+
+    // Nothing above the tallest block in the chunk can produce a face, and the
+    // column runs well past where terrain ever reaches.
+    const int topY = self.TopY();
+
+    // Tracked while meshing rather than derived from the vertices afterwards.
+    int lowestBlockY = CHUNK_HEIGHT;
+    int highestBlockY = 0;
+
     for (int x = 0; x < CHUNK_WIDTH; x++)
     {
-        for (int y = 0; y < CHUNK_HEIGHT; y++)
+        for (int y = 0; y <= topY; y++)
         {
             for (int z = 0; z < CHUNK_WIDTH; z++)
             {
@@ -322,19 +242,18 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
                 if (block == AIR)
                     continue;
 
-                float worldX = x / 16.0f + chunkPos.x;
-                float worldY = y / 16.0f;
-                float worldZ = z / 16.0f + chunkPos.y;
+                if (y < lowestBlockY) lowestBlockY = y;
+                if (y > highestBlockY) highestBlockY = y;
+
+                // Chunk-local, in sixteenths of a block. The shader adds the
+                // chunk's own origin back on.
+                const int low[3] = { x * UNITS, y * UNITS, z * UNITS };
+                const int high[3] = { low[0] + UNITS, low[1] + UNITS, low[2] + UNITS };
 
                 if (isCross(block))
                 {
-                    // Two quads, so the six texture coordinates a single quad
-                    // needs are laid down twice.
-                    vector<vec2> tileUvs = getTextureCoords((BLOCK)block, NO_SIDE);
-                    vector<vec2> crossUvs(tileUvs);
-                    crossUvs.insert(crossUvs.end(), tileUvs.begin(), tileUvs.end());
-
-                    AppendFace(false, getCrossVertex(worldX, worldY, worldZ), crossUvs);
+                    appendQuad(_solidVertices, CROSS_CORNERS[0], low, high, (BLOCK)block, NO_SIDE, false, false, chunkX, chunkZ);
+                    appendQuad(_solidVertices, CROSS_CORNERS[1], low, high, (BLOCK)block, NO_SIDE, false, false, chunkX, chunkZ);
                     continue;
                 }
 
@@ -354,6 +273,17 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
 
                 if (block == CACTUS)
                 {
+                    // A cactus is a block narrower than the one it stands in.
+                    // The atlas draws that by leaving a transparent border
+                    // around its tiles, which the cut-out threshold would throw
+                    // away, slitting the plant open along every corner. Pulling
+                    // the geometry in by that same texel instead, and trimming
+                    // the border off the texture, gives the same silhouette with
+                    // nothing see-through in it. Full block height, so a stack
+                    // of them meets cleanly.
+                    const int narrowLow[3] = { low[0] + 1, low[1], low[2] + 1 };
+                    const int narrowHigh[3] = { high[0] - 1, high[1], high[2] - 1 };
+
                     for (int side = 0; side < 6; side++)
                     {
                         // Only the faces between two stacked cactus blocks are
@@ -362,9 +292,8 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
                         if (neighbours[side] == CACTUS)
                             continue;
 
-                        AppendFace(false,
-                                   getCactusVertex(worldX, worldY, worldZ, (SIDE)side),
-                                   insetTile(getTextureCoords((BLOCK)block, (SIDE)side)));
+                        appendQuad(_solidVertices, FACE_CORNERS[side], narrowLow, narrowHigh,
+                                   (BLOCK)block, (SIDE)side, true, false, chunkX, chunkZ);
                     }
                     continue;
                 }
@@ -374,13 +303,21 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
                     if (!showFace(block, neighbours[side]))
                         continue;
 
-                    AppendFace(water,
-                               getSideVertex(worldX, worldY, worldZ, (SIDE)side),
-                               getTextureCoords((BLOCK)block, (SIDE)side));
+                    // A leaf face with another leaf behind it is only ever seen
+                    // through the gaps in the one in front. Marked so it can be
+                    // dropped once the canopy is far enough away to be drawn
+                    // with the solid tile, where nothing shows through at all.
+                    bool interiorLeaf = (block == LEAVES && neighbours[side] == LEAVES);
+
+                    appendQuad(water ? _waterVertices : _solidVertices,
+                               FACE_CORNERS[side], low, high, (BLOCK)block, (SIDE)side, false,
+                               interiorLeaf, chunkX, chunkZ);
                 }
             }
         }
     }
+
+    SetBounds(lowestBlockY, highestBlockY);
 }
 
 

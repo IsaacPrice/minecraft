@@ -5,7 +5,12 @@
 #include "BlockData.hpp"
 
 const int CHUNK_WIDTH = 16;
-const int CHUNK_HEIGHT = 255;
+
+// The height field spans roughly y = 25 to y = 65 and the tallest thing put on
+// top of it is a six block tree, so nothing has ever reached much past 75. The
+// column used to run to 255 anyway, which cost a byte of memory, a byte of
+// clearing and a step of the meshing loop for every one of those empty blocks.
+const int CHUNK_HEIGHT = 128;
 
 // The block ids for one chunk column of the world.
 //
@@ -17,7 +22,20 @@ const int CHUNK_HEIGHT = 255;
 // chunk map, which used to happen twice for every chunk that streamed in.
 struct BlockMap
 {
-    unsigned short blocks[CHUNK_WIDTH][CHUNK_HEIGHT][CHUNK_WIDTH] = { AIR };
+    // One byte a block, not two. The highest id in BlockData.hpp is 209, so the
+    // second byte was always zero; dropping it halves the memory, the clearing
+    // cost, and the amount of cache the mesher has to pull through to walk a
+    // chunk. Together with the shorter column this takes a block map from
+    // 130 KB to 32 KB.
+    unsigned char blocks[CHUNK_WIDTH][CHUNK_HEIGHT][CHUNK_WIDTH] = { AIR };
+
+    // The highest block in the chunk that is not air. Terrain tops out around
+    // y = 65 and the tallest tree reaches into the seventies, so the mesher was
+    // walking fifty-odd empty layers of every column to find nothing in them.
+    int TopY() const
+    {
+        return _topY;
+    }
 
     unsigned short Get(int x, int y, int z) const
     {
@@ -26,7 +44,10 @@ struct BlockMap
 
     void Set(int x, int y, int z, unsigned short block)
     {
-        blocks[x][y][z] = block;
+        blocks[x][y][z] = static_cast<unsigned char>(block);
+
+        if (block != AIR && y > _topY)
+            _topY = y;
     }
 
     // Bounds-checked write, for decoration that spills out of the chunk it is
@@ -40,8 +61,11 @@ struct BlockMap
         if (y < 0 || y >= CHUNK_HEIGHT)
             return;
 
-        blocks[x][y][z] = block;
+        Set(x, y, z, block);
     }
+
+private:
+    int _topY = 0;
 };
 
 typedef std::shared_ptr<BlockMap> BlockMapPtr;

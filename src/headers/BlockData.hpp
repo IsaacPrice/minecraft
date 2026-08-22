@@ -115,6 +115,11 @@ enum BLOCK {
 };
 
 
+// Block ids are stored one to a byte in BlockMap, so the atlas cannot be indexed
+// past its 256th tile without widening that back out.
+static_assert(SANDSTONE_BOTTOM <= 255, "block ids must fit in the byte BlockMap stores them in");
+
+
 // Cross blocks are the flat plants: instead of a cube they mesh as two quads
 // standing on the block's diagonals, so they are see-through from every angle.
 inline bool isCross(unsigned short block)

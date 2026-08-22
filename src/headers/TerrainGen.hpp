@@ -63,8 +63,13 @@ public:
     // state, so any number of workers can call them at once.
     ColumnInfo ColumnAt(int worldX, int worldZ) const;
     unsigned short SurfaceBlock(int worldX, int worldZ, const ColumnInfo& column) const;
+    // visibleDepth is how far below the surface this column can still be seen
+    // from, worked out from how tall the columns around it are. Below that the
+    // fill lays plain stone instead of asking the material noise, which is
+    // where nearly all of the generator's time used to go.
     void FillColumn(BlockMap& map, int localX, int localZ,
-                    int worldX, int worldZ, const ColumnInfo& column) const;
+                    int worldX, int worldZ, const ColumnInfo& column,
+                    int visibleDepth) const;
 
     uint64_t Seed() const { return _seed; }
 

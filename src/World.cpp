@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 
 // Definitions for the globals declared extern in World.hpp / ChunkCoord.hpp.
@@ -12,9 +13,32 @@ std::mutex chunkMutex;
 
 namespace
 {
-    // Uploading a mesh blocks the driver, so only a few chunks are handed to
-    // OpenGL per frame. The rest wait in the ready queue for later frames.
-    const size_t MAX_UPLOADS_PER_FRAME = 2;
+    // Uploading a mesh blocks the driver, so uploads are capped per frame. This
+    // used to be a flat two chunks, which is where most of the holes in the
+    // world came from: two a frame is 120 a second, and flying at the default
+    // speed asks for closer to two hundred, so the leading edge could never
+    // catch up and the gap in front of the player stayed empty.
+    //
+    // A time budget instead lets a frame upload as many small meshes as it can
+    // afford and still stop before it misses vsync. The count is a backstop for
+    // the case where the clock is coarser than the work.
+    const double UPLOAD_BUDGET_MS = 2.0;
+    const size_t MAX_UPLOADS_PER_FRAME = 64;
+
+    // Whether a chunk lies inside the square of the given radius about a centre.
+    bool inSquareAround(const ChunkCoord& coord, int centreX, int centreZ, int radius)
+    {
+        return coord.x >= centreX - radius && coord.x <= centreX + radius &&
+               coord.z >= centreZ - radius && coord.z <= centreZ + radius;
+    }
+
+    // Squared distance in chunks, which is all the ordering needs.
+    long long chunkDistanceSquared(const ChunkCoord& coord, int centreX, int centreZ)
+    {
+        long long dx = coord.x - centreX;
+        long long dz = coord.z - centreZ;
+        return dx * dx + dz * dz;
+    }
 
     // Chunk coordinates must round towards negative infinity. Truncating with a
     // cast makes chunk 0 twice as wide as the others and shifts every chunk on
@@ -60,20 +84,14 @@ namespace
 }
 
 
-std::set<ChunkCoord> World::ChunksInRangeOf(int centreX, int centreZ) const
-{
-    int halfRenderDistance = _renderDistance / 2;
-
-    std::set<ChunkCoord> wanted;
-    for (int i = -halfRenderDistance; i <= halfRenderDistance; i++)
-    {
-        for (int j = -halfRenderDistance; j <= halfRenderDistance; j++)
-        {
-            wanted.insert({i + centreX, j + centreZ});
-        }
-    }
-    return wanted;
-}
+// How much world is built before the first frame is drawn. Only enough to stand
+// on and look at: the rest streams in from the workers, nearest first, and the
+// fog hides the edge while it does.
+//
+// This used to be the entire render distance. At 64 that is 4225 chunks built
+// on the main thread before the window drew anything, which is most of a minute
+// of CPU work and, with every block map held at once, hundreds of megabytes.
+const int World::STARTING_RADIUS;
 
 
 // Hands back the block map for a chunk, generating it the first time it is
@@ -148,16 +166,34 @@ Chunk World::BuildChunk(const ChunkCoord& coord, const TerrainGen& terrain)
     chunk.blocks = self;
     chunk.MakeVertexObject(*negativeX, *positiveX, *negativeZ, *positiveZ);
 
+    // Nothing reads a chunk's blocks once it is meshed, and holding the
+    // reference kept every loaded chunk's block map alive for as long as the
+    // chunk was loaded. At a render distance of 64 that is 4225 maps at 128 KB
+    // each, half a gigabyte pinned to answer questions nobody asks. The
+    // generator's own cache still holds the map for as long as a neighbour
+    // might need it to mesh against.
+    chunk.blocks.reset();
+
     return chunk;
 }
 
 
-// Builds the starting world up front. This one blocks, because there is nothing
-// worth rendering until it finishes.
+// Builds the ground around the spawn point up front. This one blocks, because
+// there is nothing worth rendering until it finishes -- but it only covers
+// STARTING_RADIUS, and the streaming path fills in the rest.
 void World::GenerateChunks()
 {
-    std::set<ChunkCoord> wanted = ChunksInRangeOf(0, 0);
-    std::vector<ChunkCoord> coords(wanted.begin(), wanted.end());
+    int radius = std::min<int>(STARTING_RADIUS, LoadRadius());
+
+    std::vector<ChunkCoord> coords;
+    for (int x = -radius; x <= radius; x++)
+    {
+        for (int z = -radius; z <= radius; z++)
+        {
+            coords.push_back({x, z});
+        }
+    }
+
     std::vector<Chunk> built(coords.size());
 
     parallelFor(coords.size(), [&](size_t index)
@@ -223,8 +259,8 @@ void World::WorkerLoop()
             if (_stopWorkers)
                 return;
 
-            coord = _pending.front();
-            _pending.pop_front();
+            coord = _pending.back();
+            _pending.pop_back();
         }
 
         Chunk chunk = BuildChunk(coord, _terrain);
@@ -255,88 +291,170 @@ World::~World()
 }
 
 
+// Works out which chunks are missing around the player and queues them nearest
+// first. Only called when the answer can have changed -- when the player crosses
+// into a new chunk, or when the workers have run dry -- because the walk itself
+// is over the whole loaded square.
+void World::QueueMissingChunks(int centreX, int centreZ)
+{
+    int radius = LoadRadius();
+
+    std::vector<ChunkCoord> missing;
+    for (int x = -radius; x <= radius; x++)
+    {
+        for (int z = -radius; z <= radius; z++)
+        {
+            ChunkCoord coord{x + centreX, z + centreZ};
+            if (chunks.find(coord) == chunks.end())
+                missing.push_back(coord);
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(_queueMutex);
+
+    // Everything still only queued is dropped and rebuilt against the new
+    // centre, so the ordering below reflects where the player is now. Requests
+    // a worker has already picked up, or has finished and left in _ready, stay
+    // in _inFlight and are not queued twice.
+    for (const ChunkCoord& coord : _pending)
+        _inFlight.erase(coord);
+    _pending.clear();
+
+    for (const ChunkCoord& coord : missing)
+    {
+        if (_inFlight.find(coord) != _inFlight.end())
+            continue;
+
+        _inFlight.insert(coord);
+        _pending.push_back(coord);
+    }
+
+    // Farthest first, so the back of the vector -- which is where workers take
+    // from -- is the chunk nearest the player.
+    std::sort(_pending.begin(), _pending.end(),
+        [&](const ChunkCoord& a, const ChunkCoord& b)
+        {
+            return chunkDistanceSquared(a, centreX, centreZ) >
+                   chunkDistanceSquared(b, centreX, centreZ);
+        });
+}
+
+
+// Takes the finished meshes off the ready queue, nearest to the player first.
+// How many of them actually reach OpenGL this frame is decided by the caller's
+// time budget; the rest are handed back.
+std::vector<std::pair<ChunkCoord, Chunk>> World::TakeChunksToUpload(int centreX, int centreZ)
+{
+    std::lock_guard<std::mutex> lock(_queueMutex);
+
+    if (_ready.empty())
+        return std::vector<std::pair<ChunkCoord, Chunk>>();
+
+    std::sort(_ready.begin(), _ready.end(),
+        [&](const std::pair<ChunkCoord, Chunk>& a, const std::pair<ChunkCoord, Chunk>& b)
+        {
+            return chunkDistanceSquared(a.first, centreX, centreZ) <
+                   chunkDistanceSquared(b.first, centreX, centreZ);
+        });
+
+    size_t count = std::min(MAX_UPLOADS_PER_FRAME, _ready.size());
+
+    std::vector<std::pair<ChunkCoord, Chunk>> taken;
+    taken.reserve(count);
+    for (size_t i = 0; i < count; i++)
+    {
+        taken.push_back(std::move(_ready[i]));
+        _inFlight.erase(taken.back().first);
+    }
+    _ready.erase(_ready.begin(), _ready.begin() + count);
+
+    return taken;
+}
+
+
 void World::UpdateChunks(glm::vec3 playerPos)
 {
     int playerChunkX = chunkCoordFor(playerPos.x);
     int playerChunkZ = chunkCoordFor(playerPos.z);
 
-    std::set<ChunkCoord> wanted = ChunksInRangeOf(playerChunkX, playerChunkZ);
+    int unloadRadius = UnloadRadius();
 
-    // Drop anything that has moved outside the render distance.
+    // Drop anything that has moved past the unload radius. Tested as bounds
+    // rather than against a set of wanted coordinates: this runs every frame,
+    // and building that set was thousands of tree insertions a frame for an
+    // answer that four comparisons give.
     {
         std::lock_guard<std::mutex> lock(chunkMutex);
         for (auto it = chunks.begin(); it != chunks.end(); )
         {
-            if (wanted.find(it->first) == wanted.end())
-                it = chunks.erase(it);
-            else
+            if (inSquareAround(it->first, playerChunkX, playerChunkZ, unloadRadius))
                 ++it;
+            else
+                it = chunks.erase(it);
         }
     }
 
-    EvictBlockMaps(playerChunkX, playerChunkZ, _renderDistance / 2 + 1);
+    EvictBlockMaps(playerChunkX, playerChunkZ, unloadRadius + 1);
 
-    // Which of the wanted chunks are not loaded yet. Only this thread touches
-    // the chunk map, so no lock is needed to read it here.
-    std::vector<ChunkCoord> missing;
-    for (const ChunkCoord& coord : wanted)
-    {
-        if (chunks.find(coord) == chunks.end())
-            missing.push_back(coord);
-    }
+    // Requeue when the player crosses a chunk border, and also whenever the
+    // workers have nothing left to do -- which catches the case where a request
+    // was dropped for being out of range and then came back into it.
+    bool centreMoved = !_hasCentre || playerChunkX != _centreX || playerChunkZ != _centreZ;
 
-    std::vector<std::pair<ChunkCoord, Chunk>> toUpload;
-    bool queuedWork = false;
-
+    bool workersIdle;
     {
         std::lock_guard<std::mutex> lock(_queueMutex);
-
-        // Requests the player has already outrun are not worth building.
-        _pending.erase(
-            std::remove_if(_pending.begin(), _pending.end(),
-                [&](const ChunkCoord& coord)
-                {
-                    if (wanted.find(coord) != wanted.end())
-                        return false;
-                    _inFlight.erase(coord);
-                    return true;
-                }),
-            _pending.end());
-
-        for (const ChunkCoord& coord : missing)
-        {
-            if (_inFlight.find(coord) != _inFlight.end())
-                continue;
-
-            _inFlight.insert(coord);
-            _pending.push_back(coord);
-            queuedWork = true;
-        }
-
-        size_t uploadCount = std::min(MAX_UPLOADS_PER_FRAME, _ready.size());
-        for (size_t i = 0; i < uploadCount; i++)
-        {
-            toUpload.push_back(std::move(_ready[i]));
-            _inFlight.erase(toUpload.back().first);
-        }
-        _ready.erase(_ready.begin(), _ready.begin() + uploadCount);
+        workersIdle = _pending.empty() && _inFlight.empty();
     }
 
-    if (queuedWork)
+    if (centreMoved || workersIdle)
+    {
+        _centreX = playerChunkX;
+        _centreZ = playerChunkZ;
+        _hasCentre = true;
+
+        QueueMissingChunks(playerChunkX, playerChunkZ);
         _queueCondition.notify_all();
+    }
 
     // The only part of chunk streaming that has to run on the render thread.
+    std::vector<std::pair<ChunkCoord, Chunk>> toUpload = TakeChunksToUpload(playerChunkX, playerChunkZ);
+
+    std::chrono::steady_clock::time_point uploadStart = std::chrono::steady_clock::now();
+
+    size_t uploaded = 0;
     for (auto& entry : toUpload)
     {
-        if (wanted.find(entry.first) == wanted.end())
+        uploaded++;
+
+        if (!inSquareAround(entry.first, playerChunkX, playerChunkZ, unloadRadius))
             continue;
 
-        std::lock_guard<std::mutex> lock(chunkMutex);
-        auto inserted = chunks.emplace(entry.first, std::move(entry.second));
-        if (inserted.second)
         {
-            inserted.first->second.CreateObject();
-            inserted.first->second.Cleanup();
+            std::lock_guard<std::mutex> lock(chunkMutex);
+            auto inserted = chunks.emplace(entry.first, std::move(entry.second));
+            if (inserted.second)
+            {
+                inserted.first->second.CreateObject();
+                inserted.first->second.Cleanup();
+            }
+        }
+
+        double elapsedMs = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - uploadStart).count();
+        if (elapsedMs >= UPLOAD_BUDGET_MS)
+            break;
+    }
+
+    // Whatever the budget did not reach goes back on the ready queue for the
+    // next frame, rather than being dropped and generated again from scratch.
+    if (uploaded < toUpload.size())
+    {
+        std::lock_guard<std::mutex> lock(_queueMutex);
+        for (size_t i = uploaded; i < toUpload.size(); i++)
+        {
+            _inFlight.insert(toUpload[i].first);
+            _ready.push_back(std::move(toUpload[i]));
         }
     }
 }
