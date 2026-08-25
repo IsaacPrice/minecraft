@@ -24,6 +24,7 @@ struct Vertex
     //   bit  8     u: 0 for the left edge of the tile, 1 for the right
     //   bit  9     v: 0 for the top edge, 1 for the bottom
     //   bit  10    inset: pull one texel in on all four sides, for the cactus
+    //   bit  11    a small plant, which is dropped past the foliage distance
     //
     // The texture coordinate itself is worked out in the shader rather than
     // stored. Storing it is what caused plants and water to come out with a
@@ -52,16 +53,22 @@ struct Vertex
              | (static_cast<uint32_t>(z) << 21);
     }
 
+    // Bits 12 and 13 used to carry "this is a leaf" and "this leaf face has
+    // another leaf behind it", so the shader could swap in the solid tile and
+    // drop the inside of a canopy once it was far enough away. Both are gone:
+    // fast and fancy are a question about which faces exist at all, and about
+    // whether a leaf hides the block behind it, and neither of those is
+    // something a shader can answer -- it can drop a face that was meshed, but
+    // it cannot mesh one that was not, nor remove the face of the dirt block
+    // next door. So the mesher decides, and changing the setting remeshes.
     static uint16_t PackTexture(int tile, int cornerU, int cornerV, bool inset,
-                                bool smallFoliage, bool leaf, bool interiorLeaf)
+                                bool smallFoliage)
     {
         return static_cast<uint16_t>(tile
              | (cornerU << 8)
              | (cornerV << 9)
              | ((inset ? 1 : 0) << 10)
-             | ((smallFoliage ? 1 : 0) << 11)
-             | ((leaf ? 1 : 0) << 12)
-             | ((interiorLeaf ? 1 : 0) << 13));
+             | ((smallFoliage ? 1 : 0) << 11));
     }
 };
 

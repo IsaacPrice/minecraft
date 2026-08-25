@@ -26,4 +26,15 @@ GLuint LoadBlockAtlasArray(const char* imagePath, int tileSize);
 // has to pick one level of detail for a footprint that is long in one direction
 // and narrow in the other, and blurs the narrow direction to suit the long one.
 // An extension rather than core in 3.3, so it is asked for by name.
-void EnableAnisotropicFiltering(GLenum target);
+//
+// The level is a sample count: 1 turns it off, and anything higher is clamped to
+// what the driver reports. It is a texture parameter rather than anything baked
+// into the image, which is what lets the graphics menu change it on a texture
+// that has already been uploaded.
+void SetAnisotropicFiltering(GLenum target, int level);
+
+// The largest level the driver will honour, or 1 where the extension is missing.
+// The graphics menu offers the powers of two up to this and no further, rather
+// than offering sixteen everywhere and silently doing four.
+int MaxAnisotropySupported();
+

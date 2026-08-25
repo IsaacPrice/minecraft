@@ -5,8 +5,8 @@
 layout(location = 0) in uint packedPosition;
 
 // Atlas tile in bits 0-7, the corner of that tile in bits 8 and 9, whether to
-// pull one texel in on every side in bit 10, and what kind of foliage this is
-// -- if any -- in bits 11 and 12.
+// pull one texel in on every side in bit 10, and whether this is a small plant
+// in bit 11. See Vertex.hpp.
 layout(location = 1) in uint packedTexture;
 
 layout(location = 2) in ivec2 chunkOrigin;
@@ -28,10 +28,6 @@ const float UNIT = 1.0 / 256.0;
 // A tile is sixteen texels across, so one texel is a sixteenth of it.
 const float TEXEL = 1.0 / 16.0;
 
-// The solid leaf tile, which the atlas carries alongside the see-through one.
-// LEAVES_OPAQUE in BlockData.hpp is block 54, and a tile is its id less one.
-const uint SOLID_LEAF_TILE = 53u;
-
 void main() {
 	vec3 local = vec3(float( packedPosition        & 511u),
 	                  float((packedPosition >>  9u) & 4095u),
@@ -41,8 +37,6 @@ void main() {
 
 	uint tile = packedTexture & 255u;
 	bool smallFoliage = ((packedTexture >> 11u) & 1u) == 1u;
-	bool leaf = ((packedTexture >> 12u) & 1u) == 1u;
-	bool interiorLeaf = ((packedTexture >> 13u) & 1u) == 1u;
 
 	// Measured to the middle of the chunk rather than to this vertex, so every
 	// vertex of a quad -- and every quad in a chunk -- makes the same decision.
@@ -52,18 +46,9 @@ void main() {
 	vec2 chunkCentre = vec2(float(chunkOrigin.x), float(chunkOrigin.y)) + 0.5;
 	bool beyondFoliage = distance(chunkCentre, cameraPosition.xz) > foliageDistance;
 
-	if (beyondFoliage && leaf) {
-		// Far enough away that the gaps in a canopy are smaller than a pixel,
-		// so the solid tile is what it looks like anyway -- and it costs no
-		// cut-out test to draw.
-		tile = SOLID_LEAF_TILE;
-	}
-
-	// The faces inside a canopy are what give it depth close up, and are worth
-	// nothing once it is drawn with the solid tile: the outside is opaque by
-	// then, so every one of them is hidden. Dropping them there is what fast
-	// graphics does, and it pays back the extra geometry fancy leaves cost.
-	if (beyondFoliage && (smallFoliage || interiorLeaf)) {
+	// Small plants only. Whether a canopy is see-through or solid is settled by
+	// the mesher now, so nothing about leaves is decided here any more.
+	if (beyondFoliage && smallFoliage) {
 		// Pushed past the far plane, where clipping throws the whole triangle
 		// away before it is ever rasterised.
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);

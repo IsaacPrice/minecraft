@@ -21,6 +21,15 @@ void InitRenderResources();
 // is bound once around the draw loop rather than once per chunk.
 void BindTerrainTexture();
 
+// Anisotropic filtering on the block atlas. A texture parameter, not part of the
+// upload, so the graphics menu can change it on the atlas already in memory
+// instead of decoding and re-uploading a quarter of a megabyte of tiles.
+void SetTerrainAnisotropy(int level);
+
+// The highest level worth offering in that menu, or 1 where the driver has no
+// anisotropic filtering at all.
+int MaxTerrainAnisotropy();
+
 class Object {
 private:
     GLuint VertexArrayID = 0;
@@ -49,4 +58,9 @@ public:
     void Draw() const;
 
     bool Empty() const { return indexCount == 0; }
+
+    // What Draw submits. Kept after the vertex data has been handed to the GPU
+    // and dropped, which is why the debug overlay reads this rather than the
+    // vertex vectors.
+    GLsizei IndexCount() const { return indexCount; }
 };

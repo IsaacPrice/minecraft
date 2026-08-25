@@ -16,7 +16,7 @@ DEPFLAGS=-MMD -MP
 
 # Project sources are built with warnings enabled. The vendored sources below
 # are third party and are built without them, so the build stays quiet.
-PROJECT_SRCS=src/main.cpp src/Chunk.cpp src/Controls.cpp src/Features.cpp src/Object.cpp src/PostProcess.cpp src/Shader.cpp src/TerrainGen.cpp src/Texture.cpp src/World.cpp
+PROJECT_SRCS=src/main.cpp src/Chunk.cpp src/Controls.cpp src/DebugOverlay.cpp src/Display.cpp src/Features.cpp src/Input.cpp src/Object.cpp src/PostProcess.cpp src/Screens.cpp src/Settings.cpp src/Shader.cpp src/TerrainGen.cpp src/Texture.cpp src/UIRenderer.cpp src/Widgets.cpp src/World.cpp
 VENDOR_CXX_SRCS=src/FastNoise.cpp
 VENDOR_C_SRCS=src/glad.c
 

@@ -460,6 +460,45 @@ void World::UpdateChunks(glm::vec3 playerPos)
 }
 
 
+size_t World::PendingChunkCount()
+{
+    std::lock_guard<std::mutex> lock(_queueMutex);
+    return _pending.size() + _inFlight.size();
+}
+
+size_t World::BlockMapCount()
+{
+    std::lock_guard<std::mutex> lock(_blockMapMutex);
+    return _blockMaps.size();
+}
+
+
+void World::RebuildMeshes(bool fancyLeaves)
+{
+    StopWorkers();
+
+    SetFancyLeaves(fancyLeaves);
+
+    {
+        std::lock_guard<std::mutex> lock(_queueMutex);
+        _pending.clear();
+        _inFlight.clear();
+        _ready.clear();
+    }
+
+    // The meshes go, the block maps stay. Every chunk is then rebuilt from
+    // terrain that is already in memory, nearest first, in the background.
+    {
+        std::lock_guard<std::mutex> lock(chunkMutex);
+        chunks.clear();
+    }
+
+    _hasCentre = false;
+
+    StartWorkers();
+}
+
+
 void World::changeRenderDistance(unsigned short newRenderDistance)
 {
     StopWorkers();
@@ -477,6 +516,19 @@ void World::changeRenderDistance(unsigned short newRenderDistance)
     }
 
     _renderDistance = newRenderDistance;
-    GenerateChunks();
+
+    // Not GenerateChunks: that builds a block around the world origin, which is
+    // where the player is only at startup, and does it synchronously on the
+    // render thread. Mid-game the right answer is to forget where the wanted set
+    // was last worked out from, so the next UpdateChunks sees the centre as
+    // moved and requeues around wherever the player actually is -- in the
+    // background, nearest first, like any other movement.
+    //
+    // The chunks already built are deliberately left alone. They are still
+    // correct geometry, so raising the distance adds to them rather than
+    // rebuilding them, and lowering it lets UpdateChunks drop the far ones on
+    // the next frame through its own unload test.
+    _hasCentre = false;
+
     StartWorkers();
 }

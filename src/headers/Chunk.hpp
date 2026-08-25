@@ -9,6 +9,18 @@
 #include "Object.hpp"
 #include "Vertex.hpp"
 
+// Fancy meshes every face of every leaf block, at every depth through a canopy,
+// so the gaps in the leaf tile have more leaves behind them instead of showing
+// the sky through a hollow shell. Fast treats a leaf as an ordinary opaque
+// block: faces between two leaves are dropped, the block next to a leaf has its
+// own face dropped, and the solid tile is used.
+//
+// This is a property of the mesh rather than of the shader, so changing it means
+// rebuilding every chunk. Read on the worker threads, so it must only be changed
+// while they are stopped -- World::RebuildMeshes is what does that.
+void SetFancyLeaves(bool fancy);
+bool FancyLeaves();
+
 class Chunk {
 public:
     Chunk();
@@ -38,6 +50,12 @@ public:
     void DrawWater() const;
 
     bool Empty() const { return _solid.Empty() && _water.Empty(); }
+
+    // Triangles this chunk draws, solid and water together.
+    size_t TriangleCount() const
+    {
+        return (size_t)(_solid.IndexCount() + _water.IndexCount()) / 3;
+    }
 
     // The box this chunk's geometry actually occupies, in world units. The
     // vertical extent is measured rather than assumed: a chunk is eight units

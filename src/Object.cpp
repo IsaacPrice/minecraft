@@ -77,6 +77,20 @@ void BindTerrainTexture()
     glUniform1i(terrainSamplerUniform, 0);
 }
 
+void SetTerrainAnisotropy(int level)
+{
+    if (terrainTexture == 0)
+        return;
+
+    glBindTexture(GL_TEXTURE_2D_ARRAY, terrainTexture);
+    SetAnisotropicFiltering(GL_TEXTURE_2D_ARRAY, level);
+}
+
+int MaxTerrainAnisotropy()
+{
+    return MaxAnisotropySupported();
+}
+
 Object::Object(const std::vector<Vertex>& vertices)
 {
     Create(vertices);

@@ -16,8 +16,17 @@ namespace terrain
     // along it deepen that further.
     const int RIVER_BED_DEPTH = 4;
 
-    // Ground at or below this counts as shore, and gets sand instead of grass.
+    // Sand is laid on dry ground at or below this height -- but only where
+    // there is actually water within BEACH_RADIUS blocks. Height alone used to
+    // be the whole test, which is why any low ground was a beach whether or not
+    // it had ever seen water: the height field centres on 45 with a range of 20,
+    // so a great deal of ordinary flat plain sits at 41 or 42 and came out as
+    // desert-sized sand flats with no lake anywhere near them.
     const int SHORE_HEIGHT = SEA_LEVEL + 1;
+
+    // How far from water sand reaches, in blocks. Small on purpose: a beach is
+    // the edge of a body of water, not the ground around it.
+    const int BEACH_RADIUS = 3;
 }
 
 
@@ -45,8 +54,12 @@ struct ColumnInfo
     float aridity = 0;        // 0 lush, 1 deep desert
     float forest = 0;         // 0 open ground, 1 dense woodland
 
+    // Worked out in ColumnAt rather than derived here, because it depends on
+    // the columns around this one and not only on this one's height.
+    bool beach = false;
+
     bool underwater() const { return surfaceY < terrain::SEA_LEVEL; }
-    bool shore() const { return surfaceY <= terrain::SHORE_HEIGHT; }
+    bool shore() const { return beach; }
 };
 
 
@@ -74,6 +87,21 @@ public:
     uint64_t Seed() const { return _seed; }
 
 private:
+    // The height field and the river carve, which between them are the whole of
+    // what decides whether a column ends up under water. Split out of ColumnAt
+    // because the beach test has to ask the same question of the columns around
+    // this one, and does not need the biome and decoration noise ColumnAt also
+    // gathers. riverStrength may be null where the caller only wants the height.
+    float SurfaceHeightAt(int worldX, int worldZ, float* riverStrength) const;
+
+public:
+    // Public because ColumnCache fills its height grid with it. Pure in world
+    // coordinates, like everything else here, so two chunks meeting at a border
+    // agree about where the sand stops.
+    int SurfaceYAt(int worldX, int worldZ) const;
+
+private:
+
     uint64_t _seed = 0;
 
     // Shared across every worker rather than copied per worker. FastNoise fills

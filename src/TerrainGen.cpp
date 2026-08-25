@@ -1,5 +1,7 @@
 #include "headers/TerrainGen.hpp"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <cmath>
 
@@ -199,13 +201,38 @@ void TerrainGen::GenerateChunk(BlockMap& map, int chunkX, int chunkZ) const
     // the margin too, because how deep a column can be seen depends on the
     // columns beside it, and at a chunk edge those are in the next chunk over.
     ColumnCache cache;
+
+    // Heights first, and wider, because the beach test reads the columns around
+    // each one and those run past the margin the rest of the cache needs.
+    for (int x = 0; x < HEIGHT_WIDTH; x++)
+    {
+        for (int z = 0; z < HEIGHT_WIDTH; z++)
+        {
+            int worldX = chunkX * CHUNK_WIDTH + x - DECORATION_MARGIN - terrain::BEACH_RADIUS;
+            int worldZ = chunkZ * CHUNK_WIDTH + z - DECORATION_MARGIN - terrain::BEACH_RADIUS;
+            cache.heights[x][z] = SurfaceYAt(worldX, worldZ);
+        }
+    }
+
     for (int x = 0; x < PADDED_WIDTH; x++)
     {
         for (int z = 0; z < PADDED_WIDTH; z++)
         {
             int worldX = chunkX * CHUNK_WIDTH + x - DECORATION_MARGIN;
             int worldZ = chunkZ * CHUNK_WIDTH + z - DECORATION_MARGIN;
-            cache.columns[x][z] = ColumnAt(worldX, worldZ);
+
+            ColumnInfo& column = cache.columns[x][z];
+            column = ColumnAt(worldX, worldZ);
+
+            // Dry, low, and actually beside water. The height test comes first
+            // because it is two comparisons and rules out most of the map, which
+            // keeps the neighbour walk off all of it.
+            const int localX = x - DECORATION_MARGIN;
+            const int localZ = z - DECORATION_MARGIN;
+
+            column.beach = column.surfaceY <= terrain::SHORE_HEIGHT &&
+                           !column.underwater() &&
+                           cache.NearWater(localX, localZ);
         }
     }
 
@@ -233,10 +260,8 @@ void TerrainGen::GenerateChunk(BlockMap& map, int chunkX, int chunkZ) const
 }
 
 
-ColumnInfo TerrainGen::ColumnAt(int worldX, int worldZ) const
+float TerrainGen::SurfaceHeightAt(int worldX, int worldZ, float* riverStrength) const
 {
-    ColumnInfo column;
-
     float base = _heightNoise.GetNoise(worldX * HEIGHT_NOISE_SCALE, worldZ * HEIGHT_NOISE_SCALE)
                  * TERRAIN_HEIGHT_RANGE + TERRAIN_BASE_HEIGHT;
 
@@ -253,22 +278,54 @@ ColumnInfo TerrainGen::ColumnAt(int worldX, int worldZ) const
     if (edge > 0.0f && distanceFromChannel < edge)
         strength = smoothstep(1.0f - distanceFromChannel / edge);
 
-    // Because the centre of a channel always carries full strength, it always
-    // cuts to the bed, and so any river that exists at all has water in it.
-    int bedDepth = terrain::RIVER_BED_DEPTH +
-                   static_cast<int>(ramp(_poolNoise.GetNoise(worldX, worldZ), POOL_BEGINS, POOL_FULL)
-                                    * RIVER_POOL_EXTRA_DEPTH + 0.5f);
-
-    float bed = static_cast<float>(terrain::SEA_LEVEL - bedDepth);
     float height = base;
-    if (strength > 0.0f && bed < base)
-        height = base + (bed - base) * strength;
 
-    column.riverStrength = strength;
+    // The pool noise is only asked for inside a channel. Outside one the bed
+    // depth it produces is multiplied by a strength of zero and thrown away, and
+    // the beach test below samples a great many columns that are nowhere near a
+    // river -- so this is the difference between two noise lookups and three
+    // across most of the map.
+    if (strength > 0.0f)
+    {
+        // Because the centre of a channel always carries full strength, it
+        // always cuts to the bed, and so any river that exists at all has water
+        // in it.
+        int bedDepth = terrain::RIVER_BED_DEPTH +
+                       static_cast<int>(ramp(_poolNoise.GetNoise(worldX, worldZ), POOL_BEGINS, POOL_FULL)
+                                        * RIVER_POOL_EXTRA_DEPTH + 0.5f);
 
+        float bed = static_cast<float>(terrain::SEA_LEVEL - bedDepth);
+        if (bed < base)
+            height = base + (bed - base) * strength;
+    }
+
+    if (riverStrength)
+        *riverStrength = strength;
+
+    return height;
+}
+
+int TerrainGen::SurfaceYAt(int worldX, int worldZ) const
+{
     // Leave room for bedrock underneath and for anything the decorator stacks
     // on top, so neither has to bounds check against the ends of the column.
+    float height = SurfaceHeightAt(worldX, worldZ, NULL);
+    return std::min(std::max(static_cast<int>(height), 1), CHUNK_HEIGHT - 16);
+}
+
+ColumnInfo TerrainGen::ColumnAt(int worldX, int worldZ) const
+{
+    ColumnInfo column;
+
+    float strength = 0.0f;
+    float height = SurfaceHeightAt(worldX, worldZ, &strength);
+
+    column.riverStrength = strength;
     column.surfaceY = std::min(std::max(static_cast<int>(height), 1), CHUNK_HEIGHT - 16);
+
+    // beach is left false here and filled in by GenerateChunk, which has the
+    // heights of the surrounding columns to hand. It cannot be decided from this
+    // column alone.
 
     column.aridity = ramp(_temperatureNoise.GetNoise(worldX, worldZ), DESERT_BEGINS, DESERT_FULL);
     column.forest = ramp(_forestNoise.GetNoise(worldX, worldZ), FOREST_BEGINS, FOREST_FULL);
