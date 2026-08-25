@@ -100,7 +100,22 @@ public:
     void UpdateChunks(glm::vec3 playerPos);
     void changeRenderDistance(unsigned short newRenderDistance);
 
+    // Throws away every mesh and builds them again, with the leaf style the
+    // argument asks for. The block maps are kept, because the terrain has not
+    // changed -- only the decision about which of its faces are worth drawing --
+    // so this is a remesh and not a regeneration, and costs a fraction of one.
+    //
+    // The style is set here rather than by the caller because the mesher reads
+    // it on the worker threads, and this is the one place they are known to be
+    // stopped.
+    void RebuildMeshes(bool fancyLeaves);
+
     // The loaded square runs this many chunks out from the player in each
     // direction. Rendering derives its far plane and fog band from it.
     float LoadedRadius() const { return _renderDistance / 2.0f; }
+
+    // For the debug overlay. Both take a lock, so they are not const, and both
+    // are cheap enough to ask once a frame.
+    size_t PendingChunkCount();
+    size_t BlockMapCount();
 };

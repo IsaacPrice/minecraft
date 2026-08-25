@@ -9,7 +9,7 @@ into chunks, and lets you fly around it.
 - Procedural terrain from a seeded noise stack (height, gravel, dirt,
   rivers, temperature, woodland)
 - Rivers carved along a wandering noise channel, with lakes in low ground,
-  sand banks along every shore, and beds of gravel, sand, clay and stone
+  a band of sand along every shore, and beds of gravel, sand, clay and stone
 - Desert biome, blended at its edges, laying sand over sandstone
 - Trees, tall grass, roses and dandelions, mushrooms, cacti and dead
   shrubs on desert sand, sugar cane in stands along the waterline, and
@@ -23,6 +23,9 @@ into chunks, and lets you fly around it.
 - Texture atlas sampling for per-block, per-face textures, with alpha
   cut-out plants and a blended pass for water
 - Free-fly camera with mouse look
+- Pause and options menus drawn in-engine, over a bitmap font: rebindable
+  keys, mouse sensitivity, field of view, and graphics settings from render
+  distance to window mode. Saved to `options.txt` and reloaded at startup
 
 Generation is a pure function of the seed and the world coordinate, so the
 same seed always gives the same world, and a feature that straddles a chunk
@@ -90,34 +93,83 @@ Run from the project root, so the shader and texture paths resolve:
 ./app
 ```
 
-Pass `--novsync` to unpin the frame rate from the refresh rate. The window title
-carries the frame time, the visible and loaded chunk counts and the triangle
-count, and the same line goes to stdout once a second so two runs can be
-compared.
-
 The seed is printed to the console at startup. Passing it back is not wired
 up to the command line yet, but setting it in `main.cpp` reproduces a world
 exactly.
 
 ## Controls
 
+Every key below except `Esc` can be rebound from Options -> Controls.
+
 | Key | Action |
 | --- | --- |
 | `W` `A` `S` `D` | Move horizontally |
-| `Space` | Move up |
-| `Left Shift` | Move down |
+| `Space` | Fly up |
+| `Left Shift` | Fly down |
 | Mouse | Look around |
-| `V` | Toggle vsync |
-| `Esc` | Release the mouse cursor |
+| `F3` | Debug overlay |
+| `Esc` | Pause menu, and back out of it one screen at a time |
 
-## Benchmarking
+## Debug overlay
 
-Generation and meshing need no OpenGL context, so they can be timed on their own
-rather than read off a frame rate that vsync has already flattened:
+`F3` puts a performance readout over the world without pausing it:
 
-```bash
-make bench && ./benchmark
-```
+- Frame rate, average frame time, and the worst frame in the last half second --
+  a stutter is what gets noticed, and an average hides it completely
+- Whether frames are waiting on the display or on the frame cap
+- Chunks drawn out of chunks loaded, and how many are still queued to build
+- Triangles submitted this frame
+- How much terrain is cached, in chunks and in megabytes. At a large render
+  distance this is by far the biggest thing the process holds
+- Position in blocks, the chunk it falls in, and which way the camera faces
+- Render distance, graphics style, antialiasing, and the seed
+
+It is a HUD rather than a screen: it takes no input beyond its own toggle, does
+not stack, and the game keeps running underneath. It shares one vertex batch with
+the menus, so the whole interface is a single draw call however much is showing.
+
+## Settings
+
+`Esc` opens the pause menu. Under Settings:
+
+| Setting | |
+| --- | --- |
+| Field of View | 30 to 110 degrees |
+| Sensitivity | 10% to 300% of the base look speed |
+| Invert Mouse Y | |
+| Controls... | Click a key to rebind it, any key or mouse button; `Esc` cancels. Taking a key from another action leaves that one unbound and shown in red |
+| Graphics... | below |
+
+And under Graphics:
+
+| Setting | |
+| --- | --- |
+| Render Distance | 4 to 96 chunks, as a radius from the player |
+| Foliage Distance | Past this, small plants are dropped and canopies go solid |
+| Graphics | Fancy meshes every face of every leaf block, at every depth through a canopy, so the gaps in the leaf tile have more leaves behind them. Fast treats a leaf as an ordinary opaque block. Changing this remeshes the world, which takes a moment |
+| Antialiasing | The FXAA resolve pass |
+| VSync | |
+| Anisotropic Filtering | Off to 16x, capped at what the driver reports |
+| Max Framerate | 30 to 240 fps in tens, then unlimited |
+| Window Mode | Windowed, Borderless or Fullscreen |
+| Resolution | The sizes the monitor reports. Borderless ignores it and takes the monitor's own |
+
+Field of view, sensitivity, the graphics style, antialiasing, vsync,
+anisotropic filtering and the frame cap all apply as they are changed. Render
+distance, window mode and resolution apply when the Graphics screen is left,
+because each one tears something down and rebuilds it -- the chunk worker pool,
+or the window and the offscreen buffer behind it -- and doing that on every
+frame of a drag would be unusable.
+
+Settings are written to `options.txt` in the working directory when the menu is
+closed and when the game exits. Delete it to go back to defaults; an unknown or
+out-of-range entry is ignored or clamped rather than refused, so a file from an
+older build still loads.
+
+Render distance is a **radius**, so 32 means 32 chunks in every direction. The
+value handed to `World` is twice that, because `World` counts the width of the
+loaded square instead; `worldRenderDistance` in `main.cpp` is the one place that
+conversion happens.
 
 ## Layout
 
@@ -125,12 +177,19 @@ make bench && ./benchmark
 src/            Engine sources
 src/TerrainGen  Height, rivers, biomes: what a column of world is made of
 src/Features    Trees and plants placed on top of finished terrain
+src/Display     The window: mode, resolution, vsync and the frame cap
+src/Input       Actions and bindings, and the GLFW input callbacks
+src/Settings    Every value the options menu can change, and options.txt
+src/UIRenderer  2D quad batch and bitmap font, for anything drawn on the screen
+src/Widgets     Button, slider, toggle
+src/Screens     The screen stack and the four pages of menu
 src/headers/    Headers, plus vendored stb_image.h and FastNoise.hpp
 src/shaders/    GLSL vertex and fragment shaders
 bench/          Headless timing harness for generation and meshing
 include/        Vendored GLM, GLFW, glad and KHR headers
 lib/            Prebuilt GLFW for Windows/MinGW
-content/        terrain.png texture atlas
+content/        terrain.png texture atlas, and font.png for the menus
+content/scripts make_font.py, which bakes font.png
 ```
 
 ## Licence

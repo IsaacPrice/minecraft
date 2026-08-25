@@ -9,6 +9,9 @@ benchmark.exe
 # Editor / tooling
 /.vscode/
 
+# Settings written by the options menu
+options.txt
+
 # Generated content
 /content/scripts/
 *.d

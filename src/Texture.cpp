@@ -282,24 +282,35 @@ namespace
 }
 
 
-void EnableAnisotropicFiltering(GLenum target)
-{
-    // Not in glad's core 3.3 header, so the values are spelled out. They are
-    // fixed by the extension and the same everywhere.
-    const GLenum MAX_ANISOTROPY = 0x84FF;
-    const GLenum TEXTURE_MAX_ANISOTROPY = 0x84FE;
+// Not in glad's core 3.3 header, so the values are spelled out. They are fixed
+// by the extension and the same everywhere.
+static const GLenum MAX_ANISOTROPY = 0x84FF;
+static const GLenum TEXTURE_MAX_ANISOTROPY = 0x84FE;
 
+int MaxAnisotropySupported()
+{
     if (!hasExtension("GL_EXT_texture_filter_anisotropic") &&
         !hasExtension("GL_ARB_texture_filter_anisotropic"))
     {
-        return;
+        return 1;
     }
 
     GLfloat limit = 1.0f;
     glGetFloatv(MAX_ANISOTROPY, &limit);
 
-    // Past about sixteen there is nothing left to recover.
-    glTexParameterf(target, TEXTURE_MAX_ANISOTROPY, std::min(limit, 16.0f));
+    // Past about sixteen there is nothing left to recover, so that is the top of
+    // the range whatever the driver claims.
+    return std::max(1, std::min(16, static_cast<int>(limit)));
+}
+
+void SetAnisotropicFiltering(GLenum target, int level)
+{
+    const int limit = MaxAnisotropySupported();
+    if (limit <= 1)
+        return;
+
+    glTexParameterf(target, TEXTURE_MAX_ANISOTROPY,
+                    static_cast<GLfloat>(std::max(1, std::min(limit, level))));
 }
 
 
@@ -440,7 +451,7 @@ GLuint LoadBlockAtlasArray(const char* imagePath, int tileSize)
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    EnableAnisotropicFiltering(GL_TEXTURE_2D_ARRAY);
+    SetAnisotropicFiltering(GL_TEXTURE_2D_ARRAY, MaxAnisotropySupported());
 
     return texture;
 }

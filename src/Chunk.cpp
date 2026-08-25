@@ -33,19 +33,17 @@ namespace
     };
 
     // Plants mesh as two quads standing on the block's diagonals rather than as
-    // a cube. Both sides of each quad have to be visible, which works because
-    // face culling is off.
+    // a cube. Both sides of each quad have to be visible.
     //
-    // Face culling stays off, and not only for the plants. The box faces are not
-    // consistently wound -- NORTH and WEST come out with their normals pointing
-    // into the block rather than out of it -- so turning culling on would need
-    // those two rows reversed first. It is not worth doing yet: the plants would
-    // then have to move into a mesh of their own so they could keep both sides,
-    // which means a third draw call per chunk, and measuring this renderer shows
-    // it is bound by the number of draw calls rather than by the triangles in
-    // them. Dropping a seventh of the pixels moved the frame time by two per
-    // cent. Culling would trade GPU work this machine has to spare for CPU work
-    // it does not. Worth revisiting if the draw calls are ever batched down.
+    // Culling is on now, for the sake of fancy leaves: meshing every face of
+    // every leaf block at every depth is a great deal more geometry than a
+    // hollow shell, and culling the half of it that faces away pays for it. That
+    // needed the box faces wound consistently, which appendQuad now does. The
+    // plants keep both sides by being emitted twice, once each way round -- so
+    // culling always throws exactly one of the pair away and the pixels drawn
+    // come out the same as before. That is preferred to giving the plants a mesh
+    // of their own, which would be a third draw call per chunk, and this
+    // renderer is bound by draw calls rather than by the triangles in them.
     const unsigned char CROSS_CORNERS[2][4][3] =
     {
         { {0,0,0}, {1,0,1}, {1,1,1}, {0,1,0} },  // corner (x,z) across to (x+1,z+1)
@@ -63,24 +61,37 @@ namespace
         { {0,1}, {0,0}, {1,0}, {1,1} },  // NORTH, SOUTH
     };
 
+    bool fancyLeaves = true;
+
+    // Whether a block hides the face of whatever is next to it. Leaves are the
+    // one block whose answer depends on the graphics setting: on fast they are
+    // an ordinary opaque block and hide their neighbours, on fancy they are
+    // see-through and hide nothing.
+    bool hidesNeighbourFaces(unsigned short block)
+    {
+        if (block == LEAVES)
+            return !fancyLeaves;
+
+        return isOpaque(block);
+    }
+
     // A face is drawn unless the block beside it hides it. Two blocks of the
     // same see-through kind hide each other, so a body of water does not get a
     // surface meshed between every pair of blocks inside it.
     //
-    // Leaves are the exception, and this is the whole of what makes a canopy
-    // look full. A leaf tile is a scatter of leaves with gaps between them, so
-    // meshing only the outside of a canopy means looking through those gaps and
-    // finding nothing behind -- a hollow shell of leaf-patterned wrapping. Every
-    // leaf block drawing all six of its faces puts leaves behind those gaps, at
-    // every depth through the tree, and the layers reading against each other is
-    // what gives the canopy its density. It is the difference between fast and
-    // fancy graphics in Minecraft, which turns on this same decision.
+    // Leaves on fancy are the exception, and this is the whole of what makes a
+    // canopy look full. A leaf tile is a scatter of leaves with gaps between
+    // them, so meshing only the outside of a canopy means looking through those
+    // gaps and finding nothing behind -- a hollow shell of leaf-patterned
+    // wrapping. Every leaf block drawing all six of its faces puts leaves behind
+    // those gaps, at every depth through the tree, and the layers reading
+    // against each other is what gives the canopy its density.
     bool showFace(unsigned short block, unsigned short neighbour)
     {
-        if (isOpaque(neighbour))
+        if (hidesNeighbourFaces(neighbour))
             return false;
 
-        if (block == LEAVES)
+        if (block == LEAVES && fancyLeaves)
             return true;
 
         return block != neighbour;
@@ -91,6 +102,12 @@ namespace
     // at the bottom of BlockData.hpp name the storage ids.
     BLOCK tileFor(BLOCK blockID, SIDE side)
     {
+        // The atlas carries a solid leaf tile beside the see-through one. On
+        // fast nothing shows through a canopy anyway, and the solid tile costs
+        // no cut-out test in the fragment shader.
+        if (blockID == LEAVES && !fancyLeaves)
+            return LEAVES_OPAQUE;
+
         if (blockID == GRASS && side == BOTTOM)
             return DIRT;
         if (blockID == GRASS && side != TOP)
@@ -121,32 +138,50 @@ namespace
                     const unsigned char corners[4][3],
                     const int low[3], const int high[3],
                     BLOCK blockID, SIDE side, bool inset,
-                    bool interiorLeaf, int chunkX, int chunkZ)
+                    bool reverseWinding, int chunkX, int chunkZ)
     {
         int tile = tileFor(blockID, side) - 1;
 
-        // Both are decided here and read by the vertex shader once it knows how
-        // far away the chunk is. The mesh itself does not change with distance:
-        // a canopy is a hollow shell whether its tiles are see-through or not,
-        // because two leaf blocks already hide the faces between them.
+        // Read by the vertex shader once it knows how far away the chunk is, and
+        // the only thing left that the shader decides for itself.
         bool smallFoliage = isCross(blockID);
-        bool leaf = (blockID == LEAVES);
 
         const unsigned char (*tileCorners)[2] = TILE_CORNERS[(side == NORTH || side == SOUTH) ? 1 : 0];
 
-        for (int v = 0; v < 4; v++)
+        // NORTH and WEST are listed with their corners going round the other
+        // way, so their normals point into the block rather than out of it --
+        // which did not matter while face culling was off and is exactly what
+        // stopped it being turned on. Walking those four corners backwards fixes
+        // the winding without disturbing which tile corner belongs to which
+        // position, because both are read at the same index.
+        const bool backwards = reverseWinding != (side == NORTH || side == WEST);
+
+        for (int i = 0; i < 4; i++)
         {
+            const int v = backwards ? (3 - i) : i;
+
             Vertex vertex;
             vertex.position = Vertex::PackPosition(corners[v][0] ? high[0] : low[0],
                                                    corners[v][1] ? high[1] : low[1],
                                                    corners[v][2] ? high[2] : low[2]);
             vertex.texture = Vertex::PackTexture(tile, tileCorners[v][0], tileCorners[v][1],
-                                                 inset, smallFoliage, leaf, interiorLeaf);
+                                                 inset, smallFoliage);
             vertex.chunkX = static_cast<int16_t>(chunkX);
             vertex.chunkZ = static_cast<int16_t>(chunkZ);
             out.push_back(vertex);
         }
     }
+}
+
+
+void SetFancyLeaves(bool fancy)
+{
+    fancyLeaves = fancy;
+}
+
+bool FancyLeaves()
+{
+    return fancyLeaves;
 }
 
 
@@ -252,8 +287,13 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
 
                 if (isCross(block))
                 {
-                    appendQuad(_solidVertices, CROSS_CORNERS[0], low, high, (BLOCK)block, NO_SIDE, false, false, chunkX, chunkZ);
-                    appendQuad(_solidVertices, CROSS_CORNERS[1], low, high, (BLOCK)block, NO_SIDE, false, false, chunkX, chunkZ);
+                    for (int diagonal = 0; diagonal < 2; diagonal++)
+                    {
+                        appendQuad(_solidVertices, CROSS_CORNERS[diagonal], low, high,
+                                   (BLOCK)block, NO_SIDE, false, false, chunkX, chunkZ);
+                        appendQuad(_solidVertices, CROSS_CORNERS[diagonal], low, high,
+                                   (BLOCK)block, NO_SIDE, false, true, chunkX, chunkZ);
+                    }
                     continue;
                 }
 
@@ -303,15 +343,9 @@ void Chunk::MakeVertexObject(const BlockMap& negativeX, const BlockMap& positive
                     if (!showFace(block, neighbours[side]))
                         continue;
 
-                    // A leaf face with another leaf behind it is only ever seen
-                    // through the gaps in the one in front. Marked so it can be
-                    // dropped once the canopy is far enough away to be drawn
-                    // with the solid tile, where nothing shows through at all.
-                    bool interiorLeaf = (block == LEAVES && neighbours[side] == LEAVES);
-
                     appendQuad(water ? _waterVertices : _solidVertices,
                                FACE_CORNERS[side], low, high, (BLOCK)block, (SIDE)side, false,
-                               interiorLeaf, chunkX, chunkZ);
+                               false, chunkX, chunkZ);
                 }
             }
         }

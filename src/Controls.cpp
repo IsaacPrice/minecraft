@@ -1,5 +1,6 @@
 #include "headers/Controls.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 
@@ -7,8 +8,8 @@
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 
-extern GLFWwindow* window;
-extern const int width, height;
+#include "headers/Display.hpp"
+#include "headers/Input.hpp"
 
 glm::vec3 position = glm::vec3(0, 4, 0);
 
@@ -19,10 +20,26 @@ namespace
 
     float horizontalAngle = 3.14f;
     float verticalAngle = 0.0f;
-    float initialFoV = 60.0f;
+    float fieldOfView = 60.0f;
 
     float speed = 3.0f;
-    float mouseSpeed = 0.001f;
+
+    // The rate a sensitivity of 1.0 means, in radians of turn per pixel of
+    // mouse travel. The menu scales this rather than replacing it, so the
+    // number it shows keeps its meaning if this is ever retuned.
+    const float BASE_MOUSE_SPEED = 0.001f;
+    float mouseSensitivity = 1.0f;
+    bool invertMouseY = false;
+
+    // Measured across frames, so it has to survive between calls rather than
+    // living as a function static -- notifyResumed has to be able to reset it.
+    double lastTime = 0.0;
+    bool hasLastTime = false;
+
+    // Set when the cursor is recaptured. The frame after that reads a position
+    // that has nothing to do with where the player was looking, so the delta it
+    // implies is thrown away and only the recentring is kept.
+    bool discardMouseDelta = false;
 
     // Overwritten by setViewDistance before the first frame. The default keeps
     // the projection sane if it never is.
@@ -34,6 +51,38 @@ namespace
 void setViewDistance(float chunks)
 {
     viewDistance = chunks;
+}
+
+void setFieldOfView(float degrees)
+{
+    fieldOfView = degrees;
+}
+
+void setMouseSensitivity(float multiplier)
+{
+    mouseSensitivity = multiplier;
+}
+
+void setInvertMouseY(bool invert)
+{
+    invertMouseY = invert;
+}
+
+float getFieldOfView()
+{
+    return fieldOfView;
+}
+
+void getLookAngles(float& yawDegrees, float& pitchDegrees)
+{
+    yawDegrees = getNormalRotation(horizontalAngle * radian);
+    pitchDegrees = getNormalRotation(verticalAngle * radian);
+}
+
+void notifyResumed()
+{
+    hasLastTime = false;
+    discardMouseDelta = true;
 }
 
 // The fog band ends just inside the loaded region, so the last ring of chunks
@@ -62,18 +111,47 @@ glm::mat4 getProjectionMatrix()
 
 void computeMatricesFromInputs()
 {
-    static double lastTime = glfwGetTime();
-
     double currentTime = glfwGetTime();
+
+    if (!hasLastTime)
+    {
+        lastTime = currentTime;
+        hasLastTime = true;
+    }
+
     float deltaTime = float(currentTime - lastTime);
+
+    // Read from Display rather than from a pair of constants: the window can
+    // change size now, and centring on a stale half-width would walk the view
+    // sideways a little more every frame.
+    GLFWwindow* window = Display::Window();
+    const int width = Display::Width();
+    const int height = Display::Height();
 
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
 
     glfwSetCursorPos(window, width / 2, height / 2);
 
-    horizontalAngle += mouseSpeed * float(width / 2 - xpos);
-    verticalAngle   += mouseSpeed * float(height / 2 - ypos);
+    if (discardMouseDelta)
+    {
+        // The recentring above still happened, so the next frame measures from
+        // the middle of the screen as usual. Only this one sample is dropped.
+        discardMouseDelta = false;
+    }
+    else
+    {
+        const float lookSpeed = BASE_MOUSE_SPEED * mouseSensitivity;
+
+        horizontalAngle += lookSpeed * float(width / 2 - xpos);
+        verticalAngle   += lookSpeed * float(height / 2 - ypos) * (invertMouseY ? -1.0f : 1.0f);
+
+        // Stopped just short of straight up and straight down. Past vertical the
+        // up vector flips and the view rolls over, which the original had no
+        // guard against.
+        const float limit = 1.5533f; // 89 degrees
+        verticalAngle = std::max(-limit, std::min(limit, verticalAngle));
+    }
 
     glm::vec3 direction(
         cos(verticalAngle) * sin(horizontalAngle),
@@ -89,44 +167,51 @@ void computeMatricesFromInputs()
 
     glm::vec3 up = glm::cross(right, direction);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    // Asked for by action rather than by key, so a rebound key moves the player
+    // without this code knowing which key it now is.
+    if (Input::IsActionDown(Input::Action::Forward))
     {
         position += direction * deltaTime * speed;
     }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (Input::IsActionDown(Input::Action::Back))
     {
         position -= direction * deltaTime * speed;
     }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    if (Input::IsActionDown(Input::Action::Right))
     {
         position += right * deltaTime * speed;
     }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    if (Input::IsActionDown(Input::Action::Left))
     {
         position -= right * deltaTime * speed;
     }
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    if (Input::IsActionDown(Input::Action::Up))
     {
         position.y += deltaTime * speed;
     }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+    if (Input::IsActionDown(Input::Action::Down))
     {
         position.y -= deltaTime * speed;
     }
 
-    // Computed per frame rather than at namespace scope: width/height live in another
-    // translation unit, so a static initialiser here would depend on init order.
-    float aspectRatio = (float)width / (float)height;
+    ViewMatrix = glm::lookAt(position, position + direction, up);
+
+    lastTime = currentTime;
+}
+
+void updateProjectionMatrix()
+{
+    // Computed per frame rather than cached: the window can be resized or sent
+    // fullscreen from the graphics menu, and a stale aspect ratio stretches the
+    // whole world.
+    float aspectRatio = (float)Display::Width() / (float)Display::Height();
 
     // The far plane only has to reach the corner of the loaded square, which is
     // the radius times root two. The extra half unit keeps a chunk that is just
     // inside that corner from being clipped by it.
     float farPlane = viewDistance * 1.5f;
 
-    ProjectionMatrix = glm::perspective(glm::radians(initialFoV), aspectRatio, 0.1f, farPlane);
-    ViewMatrix = glm::lookAt(position, position + direction, up);
-
-    lastTime = currentTime;
+    ProjectionMatrix = glm::perspective(glm::radians(fieldOfView), aspectRatio, 0.1f, farPlane);
 }
 
 float getNormalRotation(float angle)

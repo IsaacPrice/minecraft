@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 #include <thread>
@@ -11,8 +12,14 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "headers/Chunk.hpp"
+#include "headers/DebugOverlay.hpp"
+#include "headers/Display.hpp"
 #include "headers/Frustum.hpp"
+#include "headers/Input.hpp"
 #include "headers/PostProcess.hpp"
+#include "headers/Screens.hpp"
+#include "headers/Settings.hpp"
 #include "headers/World.hpp"
 #include "headers/Shader.hpp"
 #include "headers/Controls.hpp"
@@ -20,24 +27,32 @@
 using namespace std;
 using namespace glm;
 
-GLFWwindow* window;
 GLuint programID;
-// extern: const has internal linkage by default, and Controls.cpp needs these.
-extern const int width = 1920, height = 1080;
 
-// How far out chunks are kept loaded, as a square this many chunks on a side.
-const unsigned short RENDER_DISTANCE = 64;
+// The window and its size used to live here as a global and a pair of consts,
+// which is why nothing could change either. Both belong to Display now; see
+// Display.hpp for what that made possible.
 
-// How far out, in chunks, the small plants are drawn: grass, ferns, flowers,
-// mushrooms, dead bushes, sugar cane, saplings. Past this they are dropped, and
-// tree canopies switch from the see-through leaf tile to the solid one, which
-// is what they read as at a distance anyway.
+// How far out chunks are kept loaded, and how far out the small plants are drawn
+// -- grass, ferns, flowers, mushrooms, dead bushes, sugar cane, saplings -- are
+// both settings now, so the graphics menu can reach them. They were consts here,
+// which meant changing either was an edit and a rebuild; the defaults are
+// unchanged and live in Settings.hpp.
 //
-// Note that the fog has already faded everything to sky by about a chunk inside
-// the loaded radius, which at the render distance above is 31 chunks -- so the
-// default here is deliberately just outside that and changes nothing on screen.
-// Lower it to trade foliage in the middle distance for fill rate.
-const float FOLIAGE_DISTANCE = 24.0f;
+// Past the foliage distance the small plants are dropped and tree canopies
+// switch from the see-through leaf tile to the solid one, which is what they
+// read as at that range anyway. The fog has already faded everything to sky by
+// about a chunk inside the loaded radius, so the default sits just outside that
+// and changes nothing on screen. Lower it to trade foliage in the middle
+// distance for fill rate.
+//
+// World counts render distance as the width of the loaded square while the menu
+// counts it as a radius, so it is handed twice the setting. Without the
+// doubling, asking for 32 chunks loaded 16.
+static unsigned short worldRenderDistance(int chunks)
+{
+    return (unsigned short)(chunks * 2);
+}
 
 // The sky, and so also the colour the fog fades terrain into. Setting this at
 // all is new: the clear colour was left at its default, which is black, so
@@ -45,12 +60,30 @@ const float FOLIAGE_DISTANCE = 24.0f;
 const vec3 SKY_COLOUR = vec3(0.55f, 0.75f, 0.94f);
 
 
-int setupWindow(bool vsync, bool fullscreen);
-
-
 int main()
 {
-    setupWindow(true, false);
+    // GLFW first, but no window yet. The settings decide the size and mode the
+    // window is created at, and reading a keybind back out of the file names it
+    // through glfwGetKeyName, so the library has to be up before the file is
+    // read and the file has to be read before the window is made.
+    if (!Display::InitLibrary())
+    {
+        printf("Could not initialise GLFW.\n");
+        return -1;
+    }
+
+    LoadSettings();
+
+    Settings& options = settings();
+
+    if (!Display::Create(options.resolutionWidth, options.resolutionHeight,
+                         (Display::Mode)options.windowMode, options.vsync))
+    {
+        printf("Could not open a window.\n");
+        return -1;
+    }
+
+    GLFWwindow* window = Display::Window();
 
     programID = LoadShaders( "src/shaders/shader.vert", "src/shaders/shader.frag" );
     GLuint MatrixID = glGetUniformLocation(programID, "MVP");
@@ -60,13 +93,43 @@ int main()
     // then rebound by every single chunk on every single draw.
     InitRenderResources();
 
+    // After the atlas exists, because anisotropy is a parameter on the texture
+    // InitRenderResources has just uploaded, and the level asked for is clamped
+    // to what this driver reports.
+    ApplyGeneralSettings();
+    ApplyGraphicsSettings();
+
+    // One batch for everything drawn over the world, menu and overlay alike, so
+    // the whole interface is a single draw call however much of it is showing.
+    UIRenderer ui;
+    const bool interfaceReady = ui.Create();
+    if (!interfaceReady)
+    {
+        // A missing font or UI shader costs the interface, not the game. Better
+        // to fly around without it than to refuse to start.
+        printf("The user interface could not be loaded; running without it.\n");
+    }
+
+    MenuSystem menu;
+    menu.Create(ui);
+
+    DebugOverlay debug;
+
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwPollEvents();
-	glfwSetCursorPos(window, width/2, height/2);
+	glfwSetCursorPos(window, Display::Width()/2, Display::Height()/2);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glFrontFace(GL_CW);
+
+    // Back faces are dropped now. Fancy leaves mesh every face of every leaf
+    // block rather than a hollow shell, which is a great deal more geometry, and
+    // throwing away the half of it that points away from the camera is what pays
+    // for that. It needed the box faces wound consistently first; see appendQuad
+    // in Chunk.cpp. Plants are emitted both ways round so they survive it.
+    glFrontFace(GL_CCW);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     glClearColor(SKY_COLOUR.r, SKY_COLOUR.g, SKY_COLOUR.b, 1.0f);
     //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
@@ -75,7 +138,7 @@ int main()
     // rendering falls back to drawing straight to the window without it rather
     // than failing to start.
     PostProcess postProcess;
-    bool antialias = postProcess.Create(width, height);
+    bool antialiasAvailable = postProcess.Create(Display::Width(), Display::Height());
 
     vec3 lightDirection = vec3(0.f, 0.f, 1.f);
     GLint lightDirUniformLocation = glGetUniformLocation(programID, "lightDirection");
@@ -90,7 +153,11 @@ int main()
 
     uint64_t seed = time(NULL);
     cout << "Seed: " << seed << "\n";
-    World world(seed, RENDER_DISTANCE);
+    // Set before the first chunk is meshed. Afterwards only World::RebuildMeshes
+    // may touch it, because the mesher reads it from the worker threads.
+    SetFancyLeaves(options.fancyGraphics);
+
+    World world(seed, worldRenderDistance(options.renderDistance));
 
     // Ties the projection's far plane and the fog band to how much world is
     // actually loaded, so terrain fades into the sky exactly where it runs out.
@@ -101,6 +168,56 @@ int main()
 
     while (!glfwWindowShouldClose(window))
     {
+        // Events first, into a list the menu reads. Polling used to sit at the
+        // bottom of the loop, which meant each frame acted on input gathered
+        // before the previous one was drawn.
+        Input::BeginFrame();
+        glfwPollEvents();
+
+        // The window can change size now, so everything sized in pixels is
+        // rebuilt when it does. The offscreen buffer is the only one nothing
+        // else owns; the viewport and the aspect ratio are worked out per frame
+        // from the same numbers.
+        if (Display::TakeSizeChange())
+        {
+            antialiasAvailable = postProcess.Create(Display::Width(), Display::Height());
+            glViewport(0, 0, Display::Width(), Display::Height());
+        }
+
+        // Timed every frame, shown only when asked for, so opening the overlay
+        // reports the rate the game has been running at rather than starting to
+        // measure from the moment it appeared.
+        debug.NewFrame();
+
+        if (Input::ActionPressed(Input::Action::ToggleDebug))
+            debug.Toggle();
+
+        // Before anything reads or draws into it: this is what establishes the
+        // canvas that hit testing and layout are both measured in.
+        ui.BeginFrame(Display::Width(), Display::Height());
+
+        menu.Update(window);
+
+        // Applied out here rather than inside the menu: the world is main's, and
+        // changing the distance stops the chunk workers and restarts them, which
+        // has to happen on the thread that holds the GL context.
+        int requestedRenderDistance = 0;
+        if (menu.TakeRenderDistanceRequest(requestedRenderDistance))
+        {
+            world.changeRenderDistance(worldRenderDistance(requestedRenderDistance));
+
+            // Without this the fog band and the far plane stay where the old
+            // distance put them, and terrain ends on a hard edge instead of
+            // fading into the sky.
+            setViewDistance(world.LoadedRadius());
+        }
+
+        if (menu.TakeMeshRebuildRequest())
+            world.RebuildMeshes(options.fancyGraphics);
+
+        const bool paused = menu.Paused();
+        const bool antialias = antialiasAvailable && options.fxaa;
+
         if (antialias)
             postProcess.BeginScene(SKY_COLOUR.r, SKY_COLOUR.g, SKY_COLOUR.b);
         else
@@ -108,7 +225,16 @@ int main()
 
         glUseProgram(programID);
 
-		computeMatricesFromInputs();
+        // Frozen while the menu is up. The camera keeps the view it had and the
+        // world carries on being drawn behind the menu, rather than the screen
+        // holding a stale frame.
+        if (!paused)
+            computeMatricesFromInputs();
+
+        // Rebuilt every frame either way, so dragging the field of view slider
+        // is seen as it moves rather than only once the menu is closed.
+        updateProjectionMatrix();
+
 		glm::mat4 ProjectionMatrix = getProjectionMatrix();
 		glm::mat4 ViewMatrix = getViewMatrix();
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
@@ -120,7 +246,7 @@ int main()
         glUniform3fv(fogColorUniformLocation, 1, value_ptr(SKY_COLOUR));
         glUniform1f(fogStartUniformLocation, getFogStart());
         glUniform1f(fogEndUniformLocation, getFogEnd());
-        glUniform1f(foliageDistanceUniformLocation, FOLIAGE_DISTANCE);
+        glUniform1f(foliageDistanceUniformLocation, options.foliageDistance);
 
         world.UpdateChunks(position);
 
@@ -171,6 +297,11 @@ int main()
         // water surfaces overlap the nearer one is blended over the further one.
         // Depth writes stay off: the chunks are sorted but the faces inside them
         // are not, so a chunk that wrote depth would hide its own far surfaces.
+        //
+        // Culling comes off for this pass. A lake is meshed as a lid with no
+        // underside, so culling it would leave nothing overhead once the camera
+        // drops below the surface.
+        glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
         glDepthMask(GL_FALSE);
         glUniform1f(alphaScaleUniformLocation, 0.65f);
@@ -180,66 +311,73 @@ int main()
         }
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
+        glEnable(GL_CULL_FACE);
+
+        DebugStats stats;
+        if (debug.Visible())
+        {
+            // Only gathered when the overlay is up. Counting triangles means
+            // walking the visible list again, which is thousands of chunks at a
+            // large render distance and pure waste when nothing reads it.
+            stats.chunksVisible = visible.size();
+            stats.chunksLoaded = chunks.size();
+
+            for (const auto& entry : visible)
+                stats.triangles += entry.second->TriangleCount();
+        }
 
         lock.unlock();
 
         if (antialias)
             postProcess.Resolve();
 
-		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        // After the resolve, so the menu goes straight into the window. FXAA is
+        // a luminance edge filter and would soften every glyph edge, and
+        // anything drawn before the resolve is inside the world pass, where it
+        // would be fogged and buried by the nearest hillside.
+        //
+        // Escape used to be read here as a level, which released the cursor and
+        // had no way of ever taking it back. It is an action with a pause screen
+        // behind it now; see MenuSystem::Update.
+        if (debug.Visible())
         {
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-		}
+            stats.chunksPending = world.PendingChunkCount();
+            stats.blockMaps = world.BlockMapCount();
+
+            // A world unit is one chunk, which is sixteen blocks. The camera
+            // works in the former and a coordinate is only useful in the latter.
+            stats.blockX = position.x * (float)CHUNK_WIDTH;
+            stats.blockY = position.y * (float)CHUNK_WIDTH;
+            stats.blockZ = position.z * (float)CHUNK_WIDTH;
+
+            stats.chunkX = (int)std::floor(position.x);
+            stats.chunkZ = (int)std::floor(position.z);
+
+            stats.seed = seed;
+            stats.renderDistance = options.renderDistance;
+            stats.fancyGraphics = options.fancyGraphics;
+            stats.fxaa = antialias;
+            stats.vsync = options.vsync;
+            stats.frameCap = options.frameCap;
+        }
+
+        menu.Render();
+        debug.Render(ui, stats);
+
+        // One flush for the menu and the overlay together.
+        ui.EndFrame();
 
         glfwSwapBuffers(window);
-        glfwPollEvents();
+
+        // After the swap, where the frame has actually finished. With vsync off
+        // this is the only thing between the renderer and running the machine
+        // at whatever rate it can manage.
+        Display::LimitFrameRate();
     }
+
+    SaveSettings();
 
     glDeleteProgram(programID);
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    Display::Destroy();
     return 0;
 }
-
-
-int setupWindow(bool vsync, bool fullscreen)
-{
-    glfwInit();
-    // No multisampling: it costs a sample per pixel for the silhouettes alone
-    // and does nothing for the aliasing inside a texture, which in a world made
-    // of textured cubes is nearly all of what is visible. Mipmaps deal with
-    // that, and FXAA picks up the silhouettes afterwards for far less.
-    glfwWindowHint(GLFW_SAMPLES, 0);
-
-    // The offscreen buffer, the viewport and the projection's aspect ratio are
-    // all built once from the size below. Resizing would need all three rebuilt,
-    // and none of that was ever wired up, so the window is fixed rather than
-    // resizable into a state that renders wrongly.
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    window = glfwCreateWindow(width, height, "Minecraft", fullscreen ? glfwGetPrimaryMonitor() : NULL, NULL);
-
-    if (window == NULL)
-    {
-        glfwTerminate();
-        return -1;
-    }
-
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(vsync);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        return -1;
-    }
-
-    return 0;
-}
-
-
-
-
